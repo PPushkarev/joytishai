@@ -1,0 +1,27 @@
+# --- Security ---
+.env
+*.env
+.venv/
+venv/
+env/
+
+# --- Python Cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# --- Database & Storage ---
+# Мы НЕ игнорируем data/chroma_db, чтобы база улетела на Railway вместе с кодом.
+# Но если база станет слишком большой (более 100мб), её лучше убрать из Гита.
+# data/chroma_db/  <-- Раскомментируй это, если решишь не пушить базу
+
+# Игнорируем временные файлы и логи
+*.log
+.DS_Store
+Thumbs.db
+
+# --- IDE Settings ---
+.idea/
+.vscode/
+*.swp

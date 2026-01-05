@@ -1,0 +1,75 @@
+name: JyotishAI CI/CD
+
+# Trigger the workflow on push or pull requests to the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run All Automated Tests
+    runs-on: ubuntu-latest
+
+    services:
+      # Spin up a MongoDB instance for logging tests
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Knowledge Base
+        # Generate the vector database before running RAG tests
+        run: python -m app.services.vector_store
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: .
+
+      - name: Run Pytest Suite
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MONGO_URL: mongodb://localhost:27017
+          ASTRO_ENGINE_URL: https://jyotishapi-production.up.railway.app
+          TEST_API_URL: http://127.0.0.1:8000
+          ANALYZE_ENDPOINT: /api/v1/forecast/generate
+          PYTHONPATH: .
+        run: |
+          # 1. Запуск сервера в фоновом режиме
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > server.log 2>&1 &
+          
+          # 2. Ожидание инициализации (10 секунд для стабильности)
+          sleep 10
+          
+          # 3. Вывод логов сервера, если он не запустился (для отладки)
+          if ! ps aux | grep -v grep | grep uvicorn > /dev/null; then
+            echo "❌ Server failed to start. Logs:"
+            cat server.log
+            exit 1
+          fi
+          
+          # 4. Запуск всех тестов
+          pytest tests/ -v -s
+
+  deploy:
+    name: Trigger Deployment
+    needs: test # Запускается ТОЛЬКО если тесты прошли
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Notify Deployment
+        run: echo "✅ All tests passed. Railway is deploying the new version."
