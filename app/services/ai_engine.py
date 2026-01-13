@@ -21,13 +21,22 @@ class AIEngine:
     """
 
     def __init__(self):
+        # 1. Сначала принудительно достаем ключ
+        api_key = os.getenv("OPENAI_API_KEY")
+
+        # Если ключа нет — сервер не должен упасть молча
+        if not api_key:
+            print("CRITICAL ERROR: OPENAI_API_KEY is not set in environment variables!")
+            # Можно выбросить исключение или оставить self.llm = None для отладки
+
         model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         temp = float(os.getenv("AI_TEMPERATURE", 0.3))
 
-        # Initialize LLM with low temperature for high factual accuracy
+        # 2. Передаем ключ ЯВНО через параметр openai_api_key
         self.llm = ChatOpenAI(
             model=model_name,
-            temperature=temp
+            temperature=temp,
+            openai_api_key=api_key  # КРИТИЧЕСКИ ВАЖНО
         )
 
         self.vsm = VectorStoreManager()
