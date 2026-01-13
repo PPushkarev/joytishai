@@ -25,6 +25,5 @@ RUN chmod +x entrypoint.sh
 # 7. Пробрасываем порт
 EXPOSE 8000
 
-# 8. Запуск через entrypoint.sh
-# Теперь Docker выполнит все шаги: Индекс -> Судья -> Сервер
-ENTRYPOINT ["/bin/sh", "entrypoint.sh"]
+# Вместо ENTRYPOINT используй CMD, так Railway легче подхватить порт
+CMD ["/bin/sh", "entrypoint.sh"]
