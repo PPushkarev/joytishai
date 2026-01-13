@@ -1,10 +1,33 @@
 # JyotishAI Interpretation Service
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-05998b.svg)
+![OpenAI](https://img.shields.io/badge/AI-GPT--4o-orange.svg)
+![ChromaDB](https://img.shields.io/badge/VectorDB-Chroma-red.svg)
+![MongoDB](https://img.shields.io/badge/NoSQL-MongoDB-47A248.svg)
+![CI Status](https://github.com/PPushkarev/JYOTISHAPI/actions/workflows/tests.yml/badge.svg)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)
+![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)
+![Railway](https://img.shields.io/badge/Deployed%20on-Railway-black.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
 A professional microservice for interpreting Vedic (Jyotish) horoscopes. The system utilizes **RAG (Retrieval-Augmented Generation)** to analyze planetary transits based on classical scriptures and modern astrological expertise.
 
 ---
 
 ## Key Features
+
+graph TD
+    A[Client Request] --> B[FastAPI Orchestrator]
+    B --> C[Astro Engine API]
+    C -- Raw Data --> B
+    B --> D[Vector DB ChromaDB]
+    D -- Context/Books --> B
+    B --> E[OpenAI GPT-4o]
+    E -- AI Analysis --> F[AI Auditor]
+    F -- Validated Response --> B
+    B --> G[Client Response]
+    B -.-> H[(MongoDB Logs)]
 
 * **Deep Interpretation**: Generates detailed forecasts using OpenAI (GPT-4o) verified against an indexed knowledge base.
 * **Knowledge Base (RAG)**: Automated indexing of astrological PDF treatises into ChromaDB to ensure high accuracy of predictions.
@@ -40,8 +63,18 @@ A professional microservice for interpreting Vedic (Jyotish) horoscopes. The sys
 ---
 
 ## Quick Start
+### Development Commands (Makefile)
 
-### 1. Environment Configuration
+The project includes a `Makefile` to simplify common development tasks. 
+
+* **Install dependencies**: `make install`
+* **Run full system**: `make run` (Triggers indexing and starts the server)
+* **Rebuild Knowledge Base**: `make index` (Updates the ChromaDB vector store)
+* **Execute Tests**: `make test` (Runs End-to-End integration tests)
+* **Cleanup**: `make clean` (Removes cache and temporary files)
+* **Fast Deploy**: `make deploy` (Cleans, updates requirements, and pushes to GitHub)
+* 
+###  Environment Configuration
 Create a `.env` file in the root directory:
 ```env
 
