@@ -19,18 +19,6 @@ A professional microservice for interpreting Vedic (Jyotish) horoscopes. The sys
 
 ##  System Architecture
 
-```mermaid
-graph TD
-    A[Client Request] --> B[FastAPI Orchestrator]
-    B --> C[Astro Engine API]
-    C -- Raw Data --> B
-    B --> D[Vector DB ChromaDB]
-    D -- Context/Books --> B
-    B --> E[OpenAI GPT-4o]
-    E -- AI Analysis --> F[AI Auditor]
-    F -- Validated Response --> B
-    B --> G[Client Response]
-    B -.-> H[(MongoDB Logs)]
     
 * **Deep Interpretation**: Generates detailed forecasts using OpenAI (GPT-4o) verified against an indexed knowledge base.
 * **Knowledge Base (RAG)**: Automated indexing of astrological PDF treatises into ChromaDB to ensure high accuracy of predictions.
