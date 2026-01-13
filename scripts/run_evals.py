@@ -17,6 +17,7 @@ from app.services.prompts import EVAL_PROMPT
 load_dotenv()
 
 # Initialize Clients
+
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 db_client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
 db = db_client.joytishai_db
