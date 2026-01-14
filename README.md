@@ -17,14 +17,30 @@ A professional microservice for interpreting Vedic (Jyotish) horoscopes. The sys
 
 ## Key Features
 
-##  System Architecture
 
-    
-* **Deep Interpretation**: Generates detailed forecasts using OpenAI (GPT-4o) verified against an indexed knowledge base.
-* **Knowledge Base (RAG)**: Automated indexing of astrological PDF treatises into ChromaDB to ensure high accuracy of predictions.
-* **Safe Generation Pipeline**: Integrated retry mechanism (up to 3 attempts) for AI responses to ensure schema compliance and stability.
-* **Analytics & Logging**: Background processing and storage of all requests, raw engine data, and AI responses in MongoDB.
-* **AI Auditor**: Automatic validation layer that scores every response for logical consistency and astrological precision.
+* **RAG (Retrieval-Augmented Generation)**: Uses a vectorized database (ChromaDB) to inject authentic context from classical Vedic texts into LLM prompts.
+* **Intelligent Orchestration**: Acts as the system's "brain," coordinating data from the Astro Engine and synthesizing it into human-readable advice.
+* **Structured Output (JSON Mode)**: Guaranteed schema-compliant responses using OpenAI's JSON mode and Pydantic validation.
+* **Resilience Layer**: Built-in retry logic and error handling for external API calls (Astro Engine & OpenAI).
+* **Analytics Deep-Dive**: Stores the full "thought process" of the AI in MongoDB for further fine-tuning and debugging.
+---
+##  System Architecture & Ecosystem
+
+This service is the **Central Orchestrator** of the Astroparamita platform. It bridges the gap between raw astronomical math and human-centric spiritual guidance.
+
+###  Ecosystem Integration
+
+![System Architecture](./docs/astroparamitaall.jpg)
+
+1. **Input**: Receives a request from the **Astroparamita Bot**.
+2. **Data Fetching**: Calls the **Transit Engine API (Core)** to get high-precision planetary positions and scores.
+3. **Context Enrichment**: Performs a similarity search in **ChromaDB** to find relevant interpretations from classical scriptures.
+4. **Synthesis**: Sends the combined data (Astro data + Scripture context) to **OpenAI GPT-4o**.
+5. **Output**: Delivers a structured, validated interpretation back to the Bot.
+
+### Related Repositories:
+*  [**Astroparamita Bot**](https://github.com/PPushkarev/astroparamitabot) — Telegram Client Interface.
+*  [**JyotishAPI**](https://github.com/PPushkarev/JYOTISHAPI.git) — Transit Engine API (Core).
 
 ---
 
@@ -51,7 +67,169 @@ A professional microservice for interpreting Vedic (Jyotish) horoscopes. The sys
 * **Procfile**: Deployment command for Railway.
 * **entrypoint.sh**: Startup script for sequential execution (Indexing -> Server).
 
+
 ---
+## API Preview
+
+<details>
+  <summary>Click to view Swagger UI Screenshots</summary>
+
+  ### AI Generation Endpoint
+  ![Swagger Overview](./docs/swagger.jpg)
+
+  ### Structured AI Response (The "Wow" factor)
+  ![AI Response](./docs/response.jpg)
+  
+  *Example of how raw data is transformed into professional astrological analysis.*
+
+  ### Data Schemas
+  ![AI Schemas](./docs/schemas.jpg)
+
+</details>
+
+---
+
+
+## Interactive API Documentation
+
+### Production (Live Server)
+The service is deployed and running the AI orchestration engine:
+- **Swagger UI**: [https://web-production-991f4.up.railway.app/docs](https://web-production-991f4.up.railway.app/docs)
+- **ReDoc**: [https://web-production-991f4.up.railway.app/redoc](https://web-production-991f4.up.railway.app/redoc)
+- **Health Status**: `Active` ✅
+
+### Local Development
+To access the documentation on your local machine after startup:
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+---
+
+To quickly test the API in Swagger UI, you can use this sample payload:
+```json
+{
+  "user_id": 500123445,
+  "chart_data": {
+    "name": "Собака",
+    "date": "1980-03-14",
+    "time": "17:30",
+    "city": "Иркутск",
+    "latitude": 52.286,
+    "longitude": 104.2807,
+    "timezone": "Asia/Irkutsk",
+    "utc_offset": 8.0,
+    "julian_day": 2444312.89583,
+    "lagna": 134.77,
+    "sign": "Лев",
+    "planets": {
+      "Лагна": {
+        "degree": "14°46'28''",
+        "sign": "Лев",
+        "house": 1,
+        "nakshatra": "Пурва-Пхалгуни",
+        "pada": 1,
+        "nakshatra_lord": "Венера",
+        "retrograde": false,
+        "display_name": "Лагна"
+      },
+      "Солнце": {
+        "degree": "0°22'44''",
+        "sign": "Рыбы",
+        "house": 8,
+        "nakshatra": "Пурва-Бхадрапада",
+        "pada": 4,
+        "nakshatra_lord": "Юпитер",
+        "retrograde": false,
+        "display_name": "Солнце"
+      },
+      "Луна": {
+        "degree": "26°43'38''",
+        "sign": "Козерог",
+        "house": 6,
+        "nakshatra": "Дхаништха",
+        "pada": 2,
+        "nakshatra_lord": "Марс",
+        "retrograde": false,
+        "display_name": "Луна",
+        "longitude": 26.72722222222222
+      },
+      "Марс": {
+        "degree": "5°39'9''",
+        "sign": "Лев",
+        "house": 1,
+        "nakshatra": "Магха",
+        "pada": 2,
+        "nakshatra_lord": "Кету",
+        "retrograde": true,
+        "display_name": "Марс R"
+      },
+      "Меркурий": {
+        "degree": "15°13'5''",
+        "sign": "Водолей",
+        "house": 7,
+        "nakshatra": "Шатабхиша",
+        "pada": 3,
+        "nakshatra_lord": "Раху",
+        "retrograde": true,
+        "display_name": "Меркурий R"
+      },
+      "Юпитер": {
+        "degree": "9°21'28''",
+        "sign": "Лев",
+        "house": 1,
+        "nakshatra": "Магха",
+        "pada": 3,
+        "nakshatra_lord": "Кету",
+        "retrograde": true,
+        "display_name": "Юпитер R"
+      },
+      "Венера": {
+        "degree": "14°54'20''",
+        "sign": "Овен",
+        "house": 9,
+        "nakshatra": "Бхарани",
+        "pada": 1,
+        "nakshatra_lord": "Венера",
+        "retrograde": false,
+        "display_name": "Венера"
+      },
+      "Сатурн": {
+        "degree": "0°2'39''",
+        "sign": "Дева",
+        "house": 2,
+        "nakshatra": "Уттара-Пхалгуни",
+        "pada": 2,
+        "nakshatra_lord": "Солнце",
+        "retrograde": true,
+        "display_name": "Сатурн R"
+      },
+      "Раху": {
+        "degree": "4°25'44''",
+        "sign": "Лев",
+        "house": 1,
+        "nakshatra": "Магха",
+        "pada": 2,
+        "nakshatra_lord": "Кету",
+        "retrograde": true,
+        "display_name": "Раху R"
+      },
+      "Кету": {
+        "degree": "4°25'44''",
+        "sign": "Водолей",
+        "house": 7,
+        "nakshatra": "Дхаништха",
+        "pada": 4,
+        "nakshatra_lord": "Марс",
+        "retrograde": true,
+        "display_name": "Кету R"
+      }
+    }
+  },
+  "transit_date": "2026-01-02",
+  "language": "ru"
+}
+```
+
 
 ## Quick Start
 ### Development Commands (Makefile)
