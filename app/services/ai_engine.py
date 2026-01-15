@@ -21,22 +21,22 @@ class AIEngine:
     """
 
     def __init__(self):
-        # 1. Сначала принудительно достаем ключ
+        # 1. get key
         api_key = os.getenv("OPENAI_API_KEY")
 
-        # Если ключа нет — сервер не должен упасть молча
+        # checking AI key
         if not api_key:
             print("CRITICAL ERROR: OPENAI_API_KEY is not set in environment variables!")
-            # Можно выбросить исключение или оставить self.llm = None для отладки
+
 
         model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         temp = float(os.getenv("AI_TEMPERATURE", 0.3))
 
-        # 2. Передаем ключ ЯВНО через параметр openai_api_key
+        # 2. transfer OPEN AI key
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=temp,
-            openai_api_key=api_key  # КРИТИЧЕСКИ ВАЖНО
+            openai_api_key=api_key
         )
 
         self.vsm = VectorStoreManager()
@@ -60,8 +60,9 @@ class AIEngine:
         retriever = self.vsm.get_retriever()
         retriever.search_kwargs = {"k": 6}
 
-        # Formulate a query focusing on the weak zone to find remedies
-        query = f"Classical interpretation and remedies for {weakest_house}"
+        # Formulate a query focusing on the weak zone and strong house
+
+        query = f"Remedies for {weakest_house} AND benefits of {strongest_house}"
         docs = await retriever.ainvoke(query)
         context = "\n\n".join([d.page_content for d in docs])
 
@@ -82,10 +83,11 @@ class AIEngine:
         response = await chain.ainvoke({
             "context": context,
             "astro_data": json.dumps(astro_data, ensure_ascii=False),
-            "top_tension": weakest_house
+            "top_tension": weakest_house,
+            "super_power": strongest_house
         })
 
-        # Audit (Logic validation)
+        # 6 Audit (Logic validation)
         audit_results = ResponseAuditor.validate_consultation(astro_data, response)
         if not audit_results["is_valid"]:
             print(f"⚠️ AI Audit Warning: {audit_results['warnings']}")

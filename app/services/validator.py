@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 
-# CHEKING ANWERS TO OUR PATTER
+# CHEKING ANWERS TO OUR PATTER AND GET SCORE
 
 class ResponseAuditor:
     """
@@ -27,7 +27,7 @@ class ResponseAuditor:
 
         if summary_scores:
             worst_score = min(summary_scores.values())
-            best_score = max(summary_scores.values())
+            # best_score = max(summary_scores.values())
 
             analysis_lower = ai_response.astrological_analysis.lower()
 
@@ -55,5 +55,8 @@ class ResponseAuditor:
         # Final validity check
         if results["audit_score"] < 50:
             results["is_valid"] = False
+
+        if not results["is_valid"]:
+            logger.error(f"❌ AUDIT FAILED | Score: {results['audit_score']} | Reasons: {results['warnings']}")
 
         return results

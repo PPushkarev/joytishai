@@ -1,11 +1,12 @@
 import datetime
 import os
 from typing import Any, Dict, List
+# framework for worKing with DB
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
-
 load_dotenv()
 
+# CREATE CLASS FOR WORKING WITH ATLAS DB FOR LOGGING PURPUSE
 
 class MongoAILogger:
     def __init__(self):
@@ -13,22 +14,22 @@ class MongoAILogger:
         self.client = AsyncIOMotorClient(self.uri)
         self.db = self.client.joytishai_db
         self.collection = self.db.ai_logs
-        # МЫ УДАЛИЛИ TIKTOKEN ОТСЮДА 🗑️
 
+# Just counting how much we spent for users quires, what we found in Vector base, raw transit data , AI response for counting
     async def log_request(
             self,
             user_query: str,
             retrieved_docs: List[Dict[str, Any]],
             ai_response: Any,
             usage: Dict[str, int],
-            model_name: str = "gpt-4o"
+            model_name: str = "gpt-4o-mini"
     ):
-        # Берем данные напрямую из словаря usage, который пришел из OpenAI
+        # How much we spent in OpenAI
         p_tokens = usage.get("prompt_tokens", 0)
         c_tokens = usage.get("completion_tokens", 0)
 
-        # Рассчитываем стоимость (актуально для gpt-4o)
-        cost = (p_tokens * 5.0 / 1_000_000) + (c_tokens * 15.0 / 1_000_000)
+        # Cost of spent
+        cost = (p_tokens * 0.15 / 1_000_000) + (c_tokens * 0.60 / 1_000_000)
 
         log_entry = {
             "timestamp": datetime.datetime.utcnow(),
@@ -49,9 +50,15 @@ class MongoAILogger:
 
         result = await self.collection.insert_one(log_entry)
         return result.inserted_id
+# AS a final we ge id record in DB
 
+
+
+
+# WE USING THIS FUNCTION TO GET INFORMATION FROM RESPONSE FAST API and get to async def log_request
     async def log_analytics(self, request, raw_data, final_res, raw_ai_obj):
-        """Метод для интеграции с FastAPI"""
+        """INTEGRATION WHIT  FastAPI"""
+
         try:
             docs = raw_data.get("relevant_texts", []) if isinstance(raw_data, dict) else []
 

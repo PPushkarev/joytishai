@@ -10,42 +10,40 @@ load_dotenv()
 # READING PDF AND CHOPPING TEXT
 class VectorStoreManager:
     def __init__(self):
+        # choose AI model for chopping ? now its OPEN AI
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-
         current_dir = os.path.dirname(os.path.abspath(__file__)) # app/services
         project_root = os.path.abspath(os.path.join(current_dir, "../.."))
-
         self.base_data_path = os.path.join(project_root, "data")
+        # choosing name of bases of knowledge and DB
         self.persist_directory = os.path.join(self.base_data_path, "chroma_db")
         self.kb_path = os.path.join(self.base_data_path, "knowledge_base")
-
         os.makedirs(self.kb_path, exist_ok=True)
 
     def ingest_pdfs(self):
         """
-        Reads PDFs, but ONLY adds files that are not already in the database.
+        Reads or eating PDFs, but ONLY adds files that are not already in the database.
         """
         if not os.path.exists(self.kb_path):
             print(f"[ERROR] Path {self.kb_path} does not exist.")
             return
 
-        # 1. Получаем список всех PDF в папке
+        # 1. get list of all files
         pdf_files = [f for f in os.listdir(self.kb_path) if f.endswith(".pdf")]
 
         if not pdf_files:
             print(f"[RAG] No PDF files found in {self.kb_path}!")
             return
 
-        # 2. Инициализируем или загружаем существующую базу
+        # 2. load of DB
         vector_db = Chroma(
             persist_directory=self.persist_directory,
             embedding_function=self.embeddings
         )
 
-        # 3. Проверяем, какие файлы уже есть в базе (через метаданные)
+        # 3. checking files n bas of knowledge (using metadata)
         existing_docs = vector_db.get()
-        # Извлекаем уникальные имена файлов из метаданных
+        # load names of files from metadata
         indexed_sources = set()
         if existing_docs and 'metadatas' in existing_docs:
             for meta in existing_docs['metadatas']:
@@ -63,7 +61,7 @@ class VectorStoreManager:
             loader = PyMuPDFLoader(os.path.join(self.kb_path, file))
             new_docs.extend(loader.load())
 
-        # 4. Если есть новые документы — нарезаем и добавляем
+        # 4. if we find some new files we going to read it  and set up size of chunk and overlap
         if new_docs:
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
             chunks = text_splitter.split_documents(new_docs)
@@ -78,6 +76,7 @@ class VectorStoreManager:
 
     def get_retriever(self):
         """
+        Make a function fo find 3 same objects
         Returns a retriever object for semantic search queries.
         """
         if not os.path.exists(self.persist_directory):

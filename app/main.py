@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- FASTAPI APP INITIALIZATION ---
-app = FastAPI(title="JyotishAI Interpretation Service (Open Access)")
+app = FastAPI(title="Jyotish AI Interpretation Service (Open Access)")
 
 # Initialize Core Services
 astro_client = AstroEngineClient()
@@ -69,7 +69,9 @@ class ForecastResponse(BaseModel):
     classic_wisdom: str
     recommendations: List[str]
 
-# --- HELPER FUNCTIONS ---
+
+
+# --- HELPER FUNCTIONS AUDIT AI CONSULTATION THAT WE GET---
 
 async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, Dict[str, Any], Optional[Any]]:
     """
@@ -105,6 +107,38 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
 
     return "Failed to generate valid response after retries", audit_results, last_raw_response
 
+
+
+@app.post("/api/v1/forecast/generate", tags=["Core & Analytics"])
+async def daily_forecast_analytics(request: ForecastRequest, background_tasks: BackgroundTasks):
+    """
+    Main endpoint, consultation , RAG-generation, audit and background logging.
+    """
+    # 1. Get data
+    raw_data = await astro_client.get_transit_data(request.model_dump())
+
+    if isinstance(raw_data, dict) and "error" in raw_data:
+        raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
+
+    # 2. starting  audit of AI consultation
+    final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
+
+    # 3. LOGGING CODE USING BACKGROUND TASK WITH FAST API
+    background_tasks.add_task(
+        ai_logger.log_analytics, # OUR FUNCTION
+        request.model_dump(),# ARG 1 USER
+        raw_data,                  # BOOKS
+        final_consultation,        # ANSWER
+        raw_response               # TOKEN
+    )
+
+    return {
+        "source_data": raw_data,
+        "ai_analysis": final_consultation,
+        "audit_report": audit_results
+    }
+
+
 # --- ENDPOINTS ---
 
 # @app.post("/api/v1/forecast/generate", response_model=ForecastResponse, tags=["Core"])
@@ -131,35 +165,6 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
 
 
 
-
-@app.post("/api/v1/forecast/generate", tags=["Core & Analytics"])
-async def daily_forecast_analytics(request: ForecastRequest, background_tasks: BackgroundTasks):
-    """
-    Основной эндпоинт: выполняет расчеты, RAG-генерацию, аудит и фоновое логирование.
-    """
-    # 1. Получаем технические данные (теперь тест #2 пройдет!)
-    raw_data = await astro_client.get_transit_data(request.model_dump())
-
-    if isinstance(raw_data, dict) and "error" in raw_data:
-        raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
-
-    # 2. Запускаем умную генерацию с аудитом
-    final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
-
-    # 3. Логируем в MongoDB в фоне (не заставляем пользователя ждать)
-    background_tasks.add_task(
-        ai_logger.log_analytics,
-        request.model_dump(),
-        raw_data,
-        final_consultation,
-        raw_response
-    )
-
-    return {
-        "source_data": raw_data,
-        "ai_analysis": final_consultation,
-        "audit_report": audit_results
-    }
 
 # --- SERVER ENTRY POINT ---
 if __name__ == "__main__":
