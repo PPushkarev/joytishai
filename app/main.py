@@ -109,46 +109,75 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
 
 
 
+
+
+# --- НОВАЯ ПРОСТАЯ ФУНКЦИЯ ЛОГИРОВАНИЯ (БЕЗ ФОНА) ---
+async def simple_log_execution(user_data: dict, context: Any, answer: dict, raw_tokens: Any):
+    """
+    Пишет в базу 'здесь и сейчас'. Если ошибка - выводит её в консоль.
+    """
+    print("\n📝 [LOG] Начинаем запись в MongoDB...")
+
+    # 1. ЗАЩИТА ОТ ОШИБОК СЕРИАЛИЗАЦИИ (То, из-за чего падало раньше)
+    safe_tokens = raw_tokens
+    try:
+        if hasattr(raw_tokens, "model_dump"):
+            safe_tokens = raw_tokens.model_dump()
+        elif hasattr(raw_tokens, "dict"):
+            safe_tokens = raw_tokens.dict()
+        elif not isinstance(raw_tokens, dict):
+            safe_tokens = str(raw_tokens)  # Превращаем в строку, если это сложный объект
+    except Exception as e:
+        safe_tokens = f"Error serializing tokens: {str(e)}"
+
+    # 2. ПРЯМАЯ ЗАПИСЬ
+    try:
+        # Мы вызываем логгер напрямую через await.
+        # Программа не пойдет дальше, пока не запишет (или не выдаст ошибку).
+        await ai_logger.log_analytics(
+            user_data,
+            context,
+            answer,
+            safe_tokens
+        )
+        print("✅ [LOG] Успешно записано в базу!")
+
+    except Exception as e:
+        # Если база недоступна или другая ошибка - мы увидим это в консоли!
+        print(f"❌ [LOG] ОШИБКА ЗАПИСИ: {e}")
+        # Мы НЕ прерываем работу эндпоинта (raise), чтобы пользователь всё равно получил гороскоп.
+
+
+# --- ТВОЙ ОБНОВЛЕННЫЙ ЭНДПОИНТ ---
+
+
 @app.post("/api/v1/forecast/generate", tags=["Core & Analytics"])
-async def daily_forecast_analytics(request: ForecastRequest, background_tasks: BackgroundTasks):
+async def daily_forecast_analytics(request: ForecastRequest):
+    # ^ Убрали BackgroundTasks из аргументов, оно нам больше не нужно
+
     """
-    Main endpoint, consultation , RAG-generation, audit and background logging.
+    Main endpoint: Consultation -> Validation -> Simple Logging
     """
-    # 1. Get data
+
+    # 1. Получаем данные (Astro)
     raw_data = await astro_client.get_transit_data(request.model_dump())
 
     if isinstance(raw_data, dict) and "error" in raw_data:
         raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
 
+    # 2. Генерируем ответ (AI + Validation)
     final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
 
-    # --- Transfer open AI file into Dic---
-
-    safe_response = raw_response  # Сохраняем оригинал
-
-    # Пытаемся превратить в dict, чтобы MongoDB приняла данные
-    if raw_response:
-        try:
-            if hasattr(raw_response, "model_dump"):
-                safe_response = raw_response.model_dump()
-            elif hasattr(raw_response, "dict"):
-                safe_response = raw_response.dict()
-            elif not isinstance(raw_response, dict):
-                safe_response = str(raw_response)  # На крайний случай - строка
-        except Exception:
-            safe_response = str(raw_response)
-
-    # -------------------------------------------------------------
-
-    # 3. ЗАПИСЬ В БАЗУ (Используем safe_response!)
-    background_tasks.add_task(
-        ai_logger.log_analytics,
+    # 3. ПРОСТОЕ ЛОГИРОВАНИЕ (Вместо BackgroundTasks)
+    # Ждем выполнения записи перед ответом пользователю
+    await simple_log_execution(
         request.model_dump(),
         raw_data,
         final_consultation,
-        safe_response  # <--- ВАЖНО: Передаем исправленную переменную!
+        raw_response
     )
 
+    # 4. Отдаем результат
     return {
         "source_data": raw_data,
         "ai_analysis": final_consultation,
@@ -181,21 +210,7 @@ async def daily_forecast_analytics(request: ForecastRequest, background_tasks: B
 #         raise HTTPException(status_code=500, detail=str(e))
 # --- DEBUG WRAPPER (ВРЕМЕННАЯ ФУНКЦИЯ ДЛЯ ОТЛОВКИ ОШИБОК) ---
 # --- DEBUG WRAPPER (ВЕРСИЯ 2.0 - ГАРАНТИРОВАННАЯ) ---
-async def debug_logging_wrapper(logger_func, *args, **kwargs):
-    # Используем logger.info вместо print - это важно для Railway!
-    logger.info("🕵️ [DEBUG] STARTING DB WRITE: Попытка записи в MongoDB...")
 
-    try:
-        # Пытаемся запустить оригинальную функцию логгера
-        await logger_func(*args, **kwargs)
-        logger.info("✅ [DEBUG] SUCCESS: Запись успешно создана!")
-
-    except Exception as e:
-        # Если упало - используем logger.error (оно будет красным или выделенным)
-        logger.error(f"❌ [DEBUG] CRITICAL ERROR: Не удалось записать лог!")
-        logger.error(f"📜 Error Details: {str(e)}")
-        # Печатаем тип ошибки для точности
-        logger.error(f"🧩 Error Type: {type(e).__name__}")
 
 
 
