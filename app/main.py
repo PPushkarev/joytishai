@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Tuple, Optional, List
 from dotenv import load_dotenv
-
+from app.services.judge_engine import execute_judge_cycle
 # Import Schemas
 from app.schemas.forecast import ForecastRequest, ForecastResponse
 
@@ -234,6 +234,25 @@ async def get_analytics_summary():
     }
 
 
+# --- NEW ADMIN ENDPOINT ---
+@app.post("/api/v1/admin/run-judge", tags=["Admin Tools"])
+async def trigger_judge_manual(background_tasks: BackgroundTasks):
+    """
+    Triggers the AI Judge process in the background.
+    Useful for manual execution from the Admin Dashboard.
+    """
+    mongo_uri = os.getenv("MONGO_URI")
+
+    if not mongo_uri:
+        return {"error": "MONGO_URI not configured on server"}
+
+    # Run in background (non-blocking)
+    background_tasks.add_task(execute_judge_cycle, mongo_uri)
+
+    return {
+        "message": "Judge started in background 🚀",
+        "info": "Results will appear in the dashboard shortly."
+    }
 
 # --- SERVER ENTRY POINT ---
 if __name__ == "__main__":

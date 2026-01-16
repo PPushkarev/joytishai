@@ -1,36 +1,34 @@
 
-# ADMIN DASHBOARD TO EVAULATE AI СONSULTATIONS
-# streamlit run C:\Users\User\PycharmProjects\joytishai\scripts\admin_panel.py
+
+# --- CONFIGURATION --
+# streamlit run scripts/admin_panel_api.py
+
 
 
 import streamlit as st
-from motor.motor_asyncio import AsyncIOMotorClient
-import asyncio
 import pandas as pd
-import os
-from dotenv import load_dotenv
+import requests
+from datetime import datetime
+import json
 
-# Load environment variables
-load_dotenv()
-
-
-
-
-
-
-# Page Configuration
+# --- CONFIGURATION ---
 st.set_page_config(
-    page_title="JyotishAI | Quality Monitor",
-    page_icon="📊",
+    page_title="JyotishAI Monitor",
+    page_icon="🔮",
     layout="wide"
 )
+
+# ⚠️ REPLACE WITH YOUR RAILWAY DOMAIN
+# If running locally: "http://localhost:8000"
+BASE_URL = "https://web-production-991f4.up.railway.app"
+
+API_STATS_URL = f"{BASE_URL}/api/v1/analytics/stats"
+API_TRIGGER_URL = f"{BASE_URL}/api/v1/admin/run-judge"
 
 # Custom Styling
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7f9;
-    }
+    .main { background-color: #f5f7f9; }
     .stMetric {
         background-color: #ffffff;
         padding: 15px;
@@ -41,107 +39,138 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
-# Async Data Fetcher
-async def fetch_logs():
-    client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
-    db = client.joytishai_db
-    collection = db.ai_logs
-    # Fetch last 50 logs sorted by newest first
-    cursor = collection.find().sort("timestamp", -1).limit(50)
-    return await cursor.to_list(length=50)
-
-
-# Main Application Logic
+# --- APP LOGIC ---
 def main():
-    st.sidebar.title("Navigation")
-    app_mode = st.sidebar.selectbox("Choose a view", ["Dashboard", "Settings"])
+    # --- SIDEBAR CONTROLS ---
+    st.sidebar.title("🎛 Control Panel")
 
-    if app_mode == "Dashboard":
-        st.title("📊 AI Quality Control Dashboard")
-        st.caption("Monitoring LLM Faithfulness, Relevancy, and Hallucinations")
+    # 1. Refresh Button
+    if st.sidebar.button("🔄 Refresh Data", type="primary", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 
-        # Fetch data
-        try:
-            logs = asyncio.run(fetch_logs())
-        except Exception as e:
-            st.error(f"Database Connection Error: {e}")
+    st.sidebar.divider()
+
+    # 2. Trigger Judge Button
+    st.sidebar.subheader("⚙️ Actions")
+    if st.sidebar.button("🔨 Run Judge Process", use_container_width=True):
+        with st.spinner("Sending signal to server..."):
+            try:
+                res = requests.post(API_TRIGGER_URL)
+                if res.status_code == 200:
+                    st.toast("Judge started successfully! 🚀", icon="✅")
+                    st.sidebar.success("Signal sent. Refresh in 30s.")
+                else:
+                    st.sidebar.error(f"Error: {res.status_code}")
+            except Exception as e:
+                st.sidebar.error(f"Connection Failed: {e}")
+
+    # --- MAIN CONTENT ---
+    st.title("📊 AI Quality Monitor")
+    st.caption(f"Connected to: {BASE_URL}")
+
+    # Fetch Data
+    try:
+        response = requests.get(API_STATS_URL, timeout=10)
+        if response.status_code != 200:
+            st.error(f"❌ Server Error: {response.text}")
             return
+        data = response.json()
+    except Exception as e:
+        st.error(f"❌ Connection Failed: {e}")
+        return
 
-        if not logs:
-            st.info("No logs found in the database.")
-            return
+    # Parse Data
+    stats = data.get("statistics", {})
+    recent_logs = data.get("recent_evaluations", [])
 
-        # Prepare DataFrame
-        data_rows = []
-        for log in logs:
-            evaluation = log.get("evaluation", {})
-            data_rows.append({
-                "Log ID": str(log["_id"]),
-                "Timestamp": log.get("timestamp"),
-                "User Query": str(log.get("user_query"))[:75] + "...",
-                "Faithfulness": evaluation.get("faithfulness"),
-                "Relevancy": evaluation.get("relevancy"),
-                "Status": evaluation.get("status"),
-                "Judge Verdict": evaluation.get("comment", "No comment")
+    # KPI Metrics
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+    faith_score = stats.get("avg_faithfulness", 0) or 0
+    rel_score = stats.get("avg_relevancy", 0) or 0
+
+    with kpi1:
+        st.metric("Total Consultations", stats.get("total_consultations", 0))
+    with kpi2:
+        st.metric("Avg Faithfulness", f"{faith_score}/5",
+                  delta="Good" if faith_score > 3.5 else "Low",
+                  delta_color="normal" if faith_score > 3.5 else "inverse")
+    with kpi3:
+        st.metric("Avg Relevancy", f"{rel_score}/5",
+                  delta="Good" if rel_score > 3.5 else "Low",
+                  delta_color="normal" if rel_score > 3.5 else "inverse")
+    with kpi4:
+        st.metric("Overall Score", f"{stats.get('avg_score', 0) or 0:.2f}/5")
+
+    st.divider()
+
+    # Logs Table
+    st.subheader("📋 Recent Evaluations")
+
+    if recent_logs:
+        table_rows = []
+        for log in recent_logs:
+            # Time Formatting
+            ts = log.get("timestamp", "")
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", ""))
+                ts_display = dt.strftime("%Y-%m-%d %H:%M")
+            except:
+                ts_display = ts
+
+            eval_data = log.get("evaluation", {})
+
+            table_rows.append({
+                "ID": log.get("_id"),
+                "Time": ts_display,
+                "User Query": str(log.get("user_query"))[:60] + "...",
+                "Faithfulness": eval_data.get("faithfulness"),
+                "Relevancy": eval_data.get("relevancy"),
+                "Judge Comment": eval_data.get("comment", "")
             })
 
-        df = pd.DataFrame(data_rows)
+        df = pd.DataFrame(table_rows)
 
-        # 1. Key Performance Indicators (KPIs)
-        kpi1, kpi2, kpi3 = st.columns(3)
+        # Highlight low scores
+        def highlight_bad_rows(row):
+            try:
+                if float(row["Faithfulness"] or 0) < 3:
+                    return ['background-color: #ffcccc'] * len(row)
+            except:
+                pass
+            return [''] * len(row)
 
-        avg_faith = df["Faithfulness"].dropna().mean()
-        avg_rel = df["Relevancy"].dropna().mean()
-        total_logs = len(df)
+        st.dataframe(
+            df.style.apply(highlight_bad_rows, axis=1),
+            use_container_width=True,
+            hide_index=True
+        )
 
-        with kpi1:
-            st.metric("Avg Faithfulness", f"{avg_faith:.2f} / 5", delta=None)
-        with kpi2:
-            st.metric("Avg Relevancy", f"{avg_rel:.2f} / 5", delta=None)
-        with kpi3:
-            st.metric("Processed Logs", total_logs)
-
-        st.divider()
-
-        # 2. Main Log Table
-        st.subheader("Latest Consultantion Logs")
-
-        # Styling function for low scores
-        def color_scores(val):
-            if isinstance(val, (int, float)):
-                if val <= 2: return 'background-color: #ffcccc; color: black;'
-                if val >= 4: return 'background-color: #ccffcc; color: black;'
-            return ''
-
-        styled_df = df.style.applymap(color_scores, subset=['Faithfulness', 'Relevancy'])
-        st.dataframe(styled_df, use_container_width=True)
-
-        # 3. Deep Dive Inspector
+        # Deep Dive Inspector
         st.divider()
         st.subheader("🔍 Deep Dive Inspector")
 
-        selected_id = st.selectbox("Select a Log ID to inspect", df["Log ID"])
+        selected_id = st.selectbox("Select Log ID to inspect:", df["ID"])
 
         if selected_id:
-            log_detail = next(item for item in logs if str(item["_id"]) == selected_id)
+            log_detail = next((item for item in recent_logs if item["_id"] == selected_id), None)
 
-            col_left, col_right = st.columns(2)
+            if log_detail:
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.info("📥 Input Data")
+                    raw_q = log_detail.get("user_query")
+                    try:
+                        st.json(json.loads(raw_q))
+                    except:
+                        st.write(raw_q)
 
-            with col_left:
-                st.info("📥 **Input (User Data)**")
-                st.json(log_detail.get("user_query"))
-                st.markdown("---")
-                st.markdown("**RAG Context (Knowledge Base):**")
-                st.write(log_detail.get("context", "No context provided"))
-
-            with col_right:
-                st.success("📤 **Output (AI Response)**")
-                st.json(log_detail.get("response"))
-
-                st.warning("⚖️ **Judge's Reasoning**")
-                eval_info = log_detail.get("evaluation", {})
-                st.write(f"**Status:** {eval_info.get('status')}")
-                st.write(f"**Comment:** {eval_info.get('comment')}")
+                with c2:
+                    st.warning("⚖️ Judge's Verdict")
+                    st.write(log_detail.get("evaluation"))
+    else:
+        st.info("No evaluated data available yet.")
 
 
 if __name__ == "__main__":
