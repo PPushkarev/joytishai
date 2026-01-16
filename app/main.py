@@ -124,23 +124,29 @@ async def daily_forecast_analytics(request: ForecastRequest, background_tasks: B
 
     # --- Transfer open AI file into Dic---
 
+    safe_response = raw_response  # Сохраняем оригинал
+
+    # Пытаемся превратить в dict, чтобы MongoDB приняла данные
     if raw_response:
-        if hasattr(raw_response, "model_dump"):
-            raw_response = raw_response.model_dump()
-        elif hasattr(raw_response, "dict"):
-            raw_response = raw_response.dict()
-        elif not isinstance(raw_response, dict):
+        try:
+            if hasattr(raw_response, "model_dump"):
+                safe_response = raw_response.model_dump()
+            elif hasattr(raw_response, "dict"):
+                safe_response = raw_response.dict()
+            elif not isinstance(raw_response, dict):
+                safe_response = str(raw_response)  # На крайний случай - строка
+        except Exception:
+            safe_response = str(raw_response)
 
-            raw_response = str(raw_response)
+    # -------------------------------------------------------------
 
-
-    # 3. LOGGING CODE USING BACKGROUND TASK WITH FAST API
+    # 3. ЗАПИСЬ В БАЗУ (Используем safe_response!)
     background_tasks.add_task(
-        ai_logger.log_analytics,  # OUR FUNCTION
-        request.model_dump(),  # ARG 1 USER
-        raw_data,  # BOOKS
-        final_consultation,  # ANSWER
-        raw_response  # TOKEN (теперь тут лежит словарь, и MongoDB его примет)
+        ai_logger.log_analytics,
+        request.model_dump(),
+        raw_data,
+        final_consultation,
+        safe_response  # <--- ВАЖНО: Передаем исправленную переменную!
     )
 
     return {
