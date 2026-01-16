@@ -173,7 +173,20 @@ async def daily_forecast_analytics(request: ForecastRequest, background_tasks: B
 #     except Exception as e:
 #         logger.error(f"Error in Generation: {str(e)}")
 #         raise HTTPException(status_code=500, detail=str(e))
-
+# --- DEBUG WRAPPER (ВРЕМЕННАЯ ФУНКЦИЯ ДЛЯ ОТЛОВКИ ОШИБОК) ---
+async def debug_logging_wrapper(logger_func, *args, **kwargs):
+    print("\n[DEBUG] 🚀 Начинаем фоновую запись в базу...")
+    try:
+        # Пытаемся запустить оригинальную функцию логгера
+        await logger_func(*args, **kwargs)
+        print("[DEBUG] ✅ УСПЕХ! Запись добавлена в MongoDB.\n")
+    except Exception as e:
+        # Если упало - кричим в консоль
+        print(f"\n[DEBUG] ❌ ОШИБКА ЛОГИРОВАНИЯ: {type(e).__name__}")
+        print(f"[DEBUG] 📜 Текст ошибки: {e}")
+        import traceback
+        traceback.print_exc()
+        print("\n")
 
 
 
