@@ -174,19 +174,22 @@ async def daily_forecast_analytics(request: ForecastRequest, background_tasks: B
 #         logger.error(f"Error in Generation: {str(e)}")
 #         raise HTTPException(status_code=500, detail=str(e))
 # --- DEBUG WRAPPER (ВРЕМЕННАЯ ФУНКЦИЯ ДЛЯ ОТЛОВКИ ОШИБОК) ---
+# --- DEBUG WRAPPER (ВЕРСИЯ 2.0 - ГАРАНТИРОВАННАЯ) ---
 async def debug_logging_wrapper(logger_func, *args, **kwargs):
-    print("\n[DEBUG] 🚀 Начинаем фоновую запись в базу...")
+    # Используем logger.info вместо print - это важно для Railway!
+    logger.info("🕵️ [DEBUG] STARTING DB WRITE: Попытка записи в MongoDB...")
+
     try:
         # Пытаемся запустить оригинальную функцию логгера
         await logger_func(*args, **kwargs)
-        print("[DEBUG] ✅ УСПЕХ! Запись добавлена в MongoDB.\n")
+        logger.info("✅ [DEBUG] SUCCESS: Запись успешно создана!")
+
     except Exception as e:
-        # Если упало - кричим в консоль
-        print(f"\n[DEBUG] ❌ ОШИБКА ЛОГИРОВАНИЯ: {type(e).__name__}")
-        print(f"[DEBUG] 📜 Текст ошибки: {e}")
-        import traceback
-        traceback.print_exc()
-        print("\n")
+        # Если упало - используем logger.error (оно будет красным или выделенным)
+        logger.error(f"❌ [DEBUG] CRITICAL ERROR: Не удалось записать лог!")
+        logger.error(f"📜 Error Details: {str(e)}")
+        # Печатаем тип ошибки для точности
+        logger.error(f"🧩 Error Type: {type(e).__name__}")
 
 
 
