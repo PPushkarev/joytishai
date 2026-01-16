@@ -120,16 +120,27 @@ async def daily_forecast_analytics(request: ForecastRequest, background_tasks: B
     if isinstance(raw_data, dict) and "error" in raw_data:
         raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
 
-    # 2. starting  audit of AI consultation
     final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
+
+    # --- Transfer open AI file into Dic---
+
+    if raw_response:
+        if hasattr(raw_response, "model_dump"):
+            raw_response = raw_response.model_dump()
+        elif hasattr(raw_response, "dict"):
+            raw_response = raw_response.dict()
+        elif not isinstance(raw_response, dict):
+
+            raw_response = str(raw_response)
+
 
     # 3. LOGGING CODE USING BACKGROUND TASK WITH FAST API
     background_tasks.add_task(
-        ai_logger.log_analytics, # OUR FUNCTION
-        request.model_dump(),# ARG 1 USER
-        raw_data,                  # BOOKS
-        final_consultation,        # ANSWER
-        raw_response               # TOKEN
+        ai_logger.log_analytics,  # OUR FUNCTION
+        request.model_dump(),  # ARG 1 USER
+        raw_data,  # BOOKS
+        final_consultation,  # ANSWER
+        raw_response  # TOKEN (теперь тут лежит словарь, и MongoDB его примет)
     )
 
     return {
