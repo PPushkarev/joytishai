@@ -112,7 +112,7 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
 
 
 # --- НОВАЯ ПРОСТАЯ ФУНКЦИЯ ЛОГИРОВАНИЯ (БЕЗ ФОНА) ---
-async def simple_log_execution(user_data: dict, context: Any, answer: dict, raw_tokens: Any):
+async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_tokens: Any):
     """
     Пишет в базу 'здесь и сейчас'. Если ошибка - выводит её в консоль.
     """
@@ -171,7 +171,7 @@ async def daily_forecast_analytics(request: ForecastRequest):
     # 3. ПРОСТОЕ ЛОГИРОВАНИЕ (Вместо BackgroundTasks)
     # Ждем выполнения записи перед ответом пользователю
     await simple_log_execution(
-        request.model_dump(),
+        request,
         raw_data,
         final_consultation,
         raw_response
