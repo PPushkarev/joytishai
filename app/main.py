@@ -179,25 +179,28 @@ async def daily_forecast_analytics(request: ForecastRequest):
 
 
 # FUNCTION FOR JUDGE ANSWERS STATISTIC MODEL
+
+
+
 @app.get("/api/v1/analytics/stats", tags=["Core & Analytics"])
 async def get_analytics_summary():
     """
-    Retrieves the average quality of consultations (as evaluated by the AI Judge)
-    and general usage statistics.
+    Retrieves the average quality of consultations (faithfulness, relevancy)
+    and general usage statistics based on AI Judge evaluations.
     """
+
+    # 1. Calculate statistics (Aggregation Pipeline)
     pipeline = [
         {
-            "$match": {
-                "evaluation.status": "evaluated"  # Filter only evaluated logs
-            }
+            "$match": { "evaluation.status": "evaluated" }  # Filter: only evaluated logs
         },
         {
             "$group": {
                 "_id": None,
                 "total_consultations": {"$sum": 1},
-                "avg_faithfulness": {"$avg": "$evaluation.faithfulness"},  # Factual accuracy
-                "avg_relevancy": {"$avg": "$evaluation.relevancy"},  # Answer relevance
-                "avg_score": {"$avg": "$evaluation.score"}  # Overall score (if available)
+                "avg_faithfulness": {"$avg": "$evaluation.faithfulness"},
+                "avg_relevancy": {"$avg": "$evaluation.relevancy"},
+                "avg_score": {"$avg": "$evaluation.score"}
             }
         },
         {
@@ -210,14 +213,20 @@ async def get_analytics_summary():
         }
     ]
 
-    # Execute aggregation
+    # Execute the pipeline
     stats = await ai_logger.collection.aggregate(pipeline).to_list(length=1)
 
-    # Fetch the last 5 Judge evaluations/comments
+    # 2. Fetch recent evaluated logs for display
     recent_logs = await ai_logger.collection.find(
         {"evaluation.status": "evaluated"},
-        {"response": 0, "context": 0, "source_data": 0}  # Exclude bulky fields to keep the response clean
+        {"response": 0, "context": 0, "source_data": 0} # Exclude heavy fields to optimize response speed
     ).sort("timestamp", -1).limit(5).to_list(length=5)
+
+    # 3. SERIALIZATION FIX: Convert ObjectId to String
+    # FastAPI cannot serialize binary MongoDB ObjectIds to JSON, so we convert them manually.
+    for log in recent_logs:
+        if "_id" in log:
+            log["_id"] = str(log["_id"])
 
     return {
         "statistics": stats[0] if stats else "No data yet",
