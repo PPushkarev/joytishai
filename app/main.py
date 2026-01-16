@@ -111,14 +111,12 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
 
 
 
-# --- НОВАЯ ПРОСТАЯ ФУНКЦИЯ ЛОГИРОВАНИЯ (БЕЗ ФОНА) ---
+# --- SIMPL FUNCTION FOR ATLAS DB LOGGING ANSERS INFORMATION FOR AI JUDGE---
 async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_tokens: Any):
     """
-    Пишет в базу 'здесь и сейчас'. Если ошибка - выводит её в консоль.
+    Write info in DB
     """
-    print("\n📝 [LOG] Начинаем запись в MongoDB...")
 
-    # 1. ЗАЩИТА ОТ ОШИБОК СЕРИАЛИЗАЦИИ (То, из-за чего падало раньше)
     safe_tokens = raw_tokens
     try:
         if hasattr(raw_tokens, "model_dump"):
@@ -126,50 +124,44 @@ async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_t
         elif hasattr(raw_tokens, "dict"):
             safe_tokens = raw_tokens.dict()
         elif not isinstance(raw_tokens, dict):
-            safe_tokens = str(raw_tokens)  # Превращаем в строку, если это сложный объект
+            safe_tokens = str(raw_tokens)
     except Exception as e:
         safe_tokens = f"Error serializing tokens: {str(e)}"
-
-    # 2. ПРЯМАЯ ЗАПИСЬ
     try:
-        # Мы вызываем логгер напрямую через await.
-        # Программа не пойдет дальше, пока не запишет (или не выдаст ошибку).
+
         await ai_logger.log_analytics(
             user_data,
             context,
             answer,
             safe_tokens
         )
-        print("✅ [LOG] Успешно записано в базу!")
 
     except Exception as e:
-        # Если база недоступна или другая ошибка - мы увидим это в консоли!
-        print(f"❌ [LOG] ОШИБКА ЗАПИСИ: {e}")
-        # Мы НЕ прерываем работу эндпоинта (raise), чтобы пользователь всё равно получил гороскоп.
+
+        print(f"❌ [LOG] Error loggin functin: {e}")
 
 
-# --- ТВОЙ ОБНОВЛЕННЫЙ ЭНДПОИНТ ---
+
+
 
 
 @app.post("/api/v1/forecast/generate", tags=["Core & Analytics"])
 async def daily_forecast_analytics(request: ForecastRequest):
-    # ^ Убрали BackgroundTasks из аргументов, оно нам больше не нужно
 
     """
     Main endpoint: Consultation -> Validation -> Simple Logging
     """
 
-    # 1. Получаем данные (Astro)
+    # 1. Get data (Astro)
     raw_data = await astro_client.get_transit_data(request.model_dump())
 
     if isinstance(raw_data, dict) and "error" in raw_data:
         raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
 
-    # 2. Генерируем ответ (AI + Validation)
+    # 2. Answer generation(AI + Validation)
     final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
 
-    # 3. ПРОСТОЕ ЛОГИРОВАНИЕ (Вместо BackgroundTasks)
-    # Ждем выполнения записи перед ответом пользователю
+    # 3. SIMPLE LOGGING ( BackgroundTasks)
     await simple_log_execution(
         request,
         raw_data,
@@ -177,7 +169,7 @@ async def daily_forecast_analytics(request: ForecastRequest):
         raw_response
     )
 
-    # 4. Отдаем результат
+    # 4. get result
     return {
         "source_data": raw_data,
         "ai_analysis": final_consultation,
@@ -185,32 +177,52 @@ async def daily_forecast_analytics(request: ForecastRequest):
     }
 
 
-# --- ENDPOINTS ---
 
-# @app.post("/api/v1/forecast/generate", response_model=ForecastResponse, tags=["Core"])
-# async def generate_forecast_endpoint(request: ForecastRequest):
-#     try:
-#         logger.info(f"Generating consultation for {request.chart_data.name}")
-#
-#         # 1. Сначала получаем данные от астро-движка (ОБЯЗАТЕЛЬНО)
-#         raw_data = await astro_client.get_transit_data(request.model_dump())
-#
-#         # Проверка на ошибку (тот самый код, который мы тестируем)
-#         if isinstance(raw_data, dict) and "error" in raw_data:
-#             raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
-#
-#         # 2. Передаем эти данные в ИИ
-#         result = await ai_engine.generate_consultation(raw_data)
-#         return result
-#
-#     except HTTPException as he:
-#         raise he
-#     except Exception as e:
-#         logger.error(f"Error in Generation: {str(e)}")
-#         raise HTTPException(status_code=500, detail=str(e))
-# --- DEBUG WRAPPER (ВРЕМЕННАЯ ФУНКЦИЯ ДЛЯ ОТЛОВКИ ОШИБОК) ---
-# --- DEBUG WRAPPER (ВЕРСИЯ 2.0 - ГАРАНТИРОВАННАЯ) ---
+# FUNCTION FOR JUDGE ANSWERS STATISTIC MODEL
+@app.get("/api/v1/analytics/stats", tags=["Core & Analytics"])
+async def get_analytics_summary():
+    """
+    Retrieves the average quality of consultations (as evaluated by the AI Judge)
+    and general usage statistics.
+    """
+    pipeline = [
+        {
+            "$match": {
+                "evaluation.status": "evaluated"  # Filter only evaluated logs
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "total_consultations": {"$sum": 1},
+                "avg_faithfulness": {"$avg": "$evaluation.faithfulness"},  # Factual accuracy
+                "avg_relevancy": {"$avg": "$evaluation.relevancy"},  # Answer relevance
+                "avg_score": {"$avg": "$evaluation.score"}  # Overall score (if available)
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "total_consultations": 1,
+                "avg_faithfulness": {"$round": ["$avg_faithfulness", 2]},
+                "avg_relevancy": {"$round": ["$avg_relevancy", 2]}
+            }
+        }
+    ]
 
+    # Execute aggregation
+    stats = await ai_logger.collection.aggregate(pipeline).to_list(length=1)
+
+    # Fetch the last 5 Judge evaluations/comments
+    recent_logs = await ai_logger.collection.find(
+        {"evaluation.status": "evaluated"},
+        {"response": 0, "context": 0, "source_data": 0}  # Exclude bulky fields to keep the response clean
+    ).sort("timestamp", -1).limit(5).to_list(length=5)
+
+    return {
+        "statistics": stats[0] if stats else "No data yet",
+        "recent_evaluations": recent_logs
+    }
 
 
 
