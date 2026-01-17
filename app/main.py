@@ -170,6 +170,9 @@ async def daily_forecast_analytics(request: ForecastRequest):
     if isinstance(raw_data, dict) and "error" in raw_data:
         raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
 
+    if isinstance(raw_data, dict):
+        raw_data["chart_data"] = request.chart_data.model_dump()
+
     # 2. Answer generation(AI + Validation)
     final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
 
