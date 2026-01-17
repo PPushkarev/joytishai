@@ -71,28 +71,46 @@ class AIEngine:
             strongest_house = "general balance"
         # --- [КОНЕЦ ИЗМЕНЕНИЙ] ---
 
-            # 3. RAG RETRIEVAL
+
+
+
+        # # 3. RAG RETRIEVAL
+        # retriever = self.vsm.get_retriever()
+        # retriever.search_kwargs = {"k": 6}
+        # query = f"Remedies for {weakest_house} AND benefits of {strongest_house}"
+        # docs = await retriever.ainvoke(query)
+        # context = "\n\n".join([d.page_content for d in docs])
+
+        # 3. RAG RETRIEVAL (С ЗАЩИТОЙ ОТ ОШИБОК)
+        # Инициализируем переменную ЗАРАНЕЕ, чтобы избежать UnboundLocalError
+        context = ""
+
+        try:
             retriever = self.vsm.get_retriever()
-            retriever.search_kwargs = {"k": 6}  # Можно временно увеличить до 10
+            retriever.search_kwargs = {"k": 6}
 
-            # Уточненный запрос (как мы обсуждали)
-            query = f"Remedies, Mantras, Donations for weak {weakest_house}. Strengths of {strongest_house}"
+            # Формируем запрос
+            query = (
+                f"Vedic remedies, Mantras, Gemstones and specific Upayas for weak {weakest_house}. "
+                f"Positive effects and how to strengthen {strongest_house}."
+            )
 
-            print(f"🔎 DEBUG: Ищу в базе: '{query}'")  # <--- ЛОГ ЗАПРОСА
+            print(f"🔎 DEBUG: RAG Query: {query}")
 
+            # Пытаемся найти документы
             docs = await retriever.ainvoke(query)
 
-            # --- [ВСТАВИТЬ ЭТОТ БЛОК ДЛЯ ПРОВЕРКИ] ---
-            print(f"🔎 DEBUG: Найдено документов: {len(docs)}")
-            if not docs:
-                print("🚨 ОШИБКА: RAG вернул пустой список! База знаний молчит.")
+            if docs:
+                print(f"✅ DEBUG: Найдено документов: {len(docs)}")
+                context = "\n\n".join([d.page_content for d in docs])
             else:
-                for i, doc in enumerate(docs):
-                    # Печатаем первые 200 символов каждого найденного куска
-                    print(f"📄 Doc {i + 1}: {doc.page_content[:200]}...")
-            # -----------------------------------------
+                print("⚠️ DEBUG: RAG вернул пустой список (документы не найдены).")
+                context = "No specific remedies found in knowledge base."
 
-            context = "\n\n".join([d.page_content for d in docs])
+        except Exception as e:
+            # Если база упала (нет соединения, ошибка FAISS и т.д.), мы не крашим всё приложение
+            print(f"🚨 RAG ERROR (Игнорируем и идем дальше): {e}")
+            context = "Knowledge base temporarily unavailable."
 
         # 4. PROMPT PREPARATION
         # Исправленный шаблон: явно включаем {context} и переменные фокуса
