@@ -1,10 +1,3 @@
-
-
-# --- CONFIGURATION --
-# streamlit run scripts/admin_panel_api.py
-
-
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -18,10 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# ⚠️ REPLACE WITH YOUR RAILWAY DOMAIN
-# If running locally: "http://localhost:8000"
+# ⚠️ ВАЖНО: УБЕДИСЬ, ЧТО ЭТО ТВОЙ АКТУАЛЬНЫЙ ДОМЕН RAILWAY
 BASE_URL = "https://web-production-991f4.up.railway.app"
 
+# Эндпоинты
 API_STATS_URL = f"{BASE_URL}/api/v1/analytics/stats"
 API_TRIGGER_URL = f"{BASE_URL}/api/v1/admin/run-judge"
 
@@ -34,6 +27,10 @@ st.markdown("""
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stExpander {
+        background-color: #ffffff;
+        border-radius: 5px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -147,30 +144,86 @@ def main():
             hide_index=True
         )
 
-        # Deep Dive Inspector
+        # --- FORENSIC INSPECTOR (Глубокий анализ) ---
         st.divider()
-        st.subheader("🔍 Deep Dive Inspector")
+        st.header("🕵️‍♂️ Deep Dive Inspector (Forensics)")
+        st.caption("Compare Raw Inputs -> Prepared Prompt -> AI Response.")
 
         selected_id = st.selectbox("Select Log ID to inspect:", df["ID"])
 
         if selected_id:
-            log_detail = next((item for item in recent_logs if item["_id"] == selected_id), None)
+            # Находим полный объект лога
+            log = next((item for item in recent_logs if item["_id"] == selected_id), None)
 
-            if log_detail:
-                c1, c2 = st.columns(2)
+            if log:
+                # === СЕКЦИЯ 1: ПОТОК ДАННЫХ (3 КОЛОНКИ) ===
+                st.subheader("1. Data Flow Analysis")
+                c1, c2, c3 = st.columns(3)
+
+                # КОЛОНКА 1: СЫРЫЕ ДАННЫЕ (API)
                 with c1:
-                    st.info("📥 Input Data")
-                    raw_q = log_detail.get("user_query")
-                    try:
-                        st.json(json.loads(raw_q))
-                    except:
-                        st.write(raw_q)
+                    st.info("📥 1. Raw API Data")
+                    st.caption("From Frontend (Python Object)")
+                    raw_q = log.get("user_query")
 
+                    if isinstance(raw_q, (dict, list)):
+                        st.json(raw_q, expanded=False)
+                    else:
+                        st.code(str(raw_q), language="python")
+
+                # КОЛОНКА 2: ОЧИЩЕННЫЕ ДАННЫЕ (ТО, ЧТО УШЛО В GPT)
                 with c2:
-                    st.warning("⚖️ Judge's Verdict")
-                    st.write(log_detail.get("evaluation"))
+                    st.warning("⚙️ 2. Clean Input (Prompt)")
+                    st.caption("Converted text for AI. If empty = old log.")
+
+                    # Пытаемся достать новое поле
+                    formatted_input = log.get("formatted_input", "⚠️ Not saved (Old Log)")
+                    st.text_area("Prompt Content", formatted_input, height=350)
+
+                # КОЛОНКА 3: RAG КОНТЕКСТ
+                with c3:
+                    st.secondary("📚 3. RAG Context")
+                    st.caption("Found in Knowledge Base.")
+                    context_data = log.get("context")
+
+                    if not context_data:
+                        st.error("⚠️ Context is EMPTY!")
+                    elif isinstance(context_data, list):
+                        for i, chunk in enumerate(context_data):
+                            with st.expander(f"Fragment #{i + 1}", expanded=False):
+                                st.write(chunk)
+                    else:
+                        st.text_area("Full Context", str(context_data), height=350)
+
+                st.divider()
+
+                # === СЕКЦИЯ 2: ВЫХОДНЫЕ ДАННЫЕ ===
+                st.subheader("2. AI Output & Verdict")
+                c_out1, c_out2 = st.columns([2, 1])
+
+                # КОЛОНКА 1: ОТВЕТ ИИ
+                with c_out1:
+                    st.success("🤖 AI Generated Response")
+                    st.write(log.get("response"))
+
+                # КОЛОНКА 2: ОЦЕНКА СУДЬИ
+                with c_out2:
+                    st.markdown("### ⚖️ Judge's Verdict")
+                    eval_data = log.get("evaluation", {})
+
+                    m1, m2 = st.columns(2)
+                    m1.metric("Faithfulness", f"{eval_data.get('faithfulness', 0)}/5")
+                    m2.metric("Relevancy", f"{eval_data.get('relevancy', 0)}/5")
+
+                    st.markdown("**Judge's Comment:**")
+                    st.info(eval_data.get("comment", "No comment"))
+
+                    # Кнопка просмотра всего JSON
+                    with st.expander("📂 SHOW FULL LOG (RAW JSON)"):
+                        st.json(log)
+
     else:
-        st.info("No evaluated data available yet.")
+        st.info("No evaluated data available yet. Click 'Run Judge Process'.")
 
 
 if __name__ == "__main__":

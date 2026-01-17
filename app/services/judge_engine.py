@@ -1,5 +1,5 @@
 # app/services/judge_engine.py
-# python scripts/evaluate_pending_logs.py
+#
 
 import os
 import json
