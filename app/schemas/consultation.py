@@ -30,6 +30,8 @@ class AstrologicalConsultation(BaseModel):
         description="A list of several specific, actionable recommendations for the user."
     )
 
+    debug_formatted_input: Optional[str] = Field(None, description="Technical field for logs")
+
     # Technical field to store RAG context for logging and evaluation
     # It won't be visible to the user if you don't include it in the final UI
     metadata_context: Optional[List[str]] = Field(
