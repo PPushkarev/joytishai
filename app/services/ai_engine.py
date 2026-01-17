@@ -7,10 +7,10 @@ from app.services.prompts import JYOTISH_SYSTEM_PROMPT
 from app.services.validator import ResponseAuditor
 from app.services.vector_store import VectorStoreManager
 from app.schemas.consultation import AstrologicalConsultation
+
 # Load environment variables (API Keys, etc.)
 load_dotenv()
 
-# STEP TWO  MAKE A CONSULTATION FROM AI
 
 class AIEngine:
     """
@@ -19,17 +19,17 @@ class AIEngine:
     """
 
     def __init__(self):
-        # 1. get key
+        # 1. Get API Key
         api_key = os.getenv("OPENAI_API_KEY")
 
-        # checking AI key
+        # Check AI Key
         if not api_key:
             print("CRITICAL ERROR: OPENAI_API_KEY is not set in environment variables!")
 
         model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         temp = float(os.getenv("AI_TEMPERATURE", 0.3))
 
-        # 2. transfer OPEN AI key
+        # 2. Initialize LLM
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=temp,
@@ -38,14 +38,16 @@ class AIEngine:
 
         self.vsm = VectorStoreManager()
 
-    # --- [НОВОЕ] Вспомогательная функция для превращения JSON в текст ---
+    # --- [UPDATED] Helper function to format ALL data for AI and Logs ---
     def _format_planetary_facts(self, astro_data: dict) -> str:
         """
-        Превращает сложный JSON в простой список фактов для ИИ.
-        Пример: "- Луна: Дом 6, Знак Козерог"
+        Converts complex JSON into a clean, human-readable text list.
+        It includes BOTH:
+        1. Transit Scores (Calculated strength of houses).
+        2. Natal Chart (Planetary positions).
         """
         try:
-            # Нормализация входных данных (dict или json string)
+            # Normalize input (dict, json string, or pydantic)
             if hasattr(astro_data, 'dict'):
                 data = astro_data.dict()
             elif isinstance(astro_data, str):
@@ -53,20 +55,36 @@ class AIEngine:
             else:
                 data = astro_data
 
-            # Ищем планеты (структура может быть вложенной)
-            # Сначала ищем в корне, потом в chart_data
+            lines = []
+
+            # --- SECTION 1: TRANSIT SCORES (The Math) ---
+            # Extract summary scores (the core of the forecast)
+            scores = data.get("summary_scores")
+            if scores:
+                lines.append("=== 📊 DAILY TRANSIT SCORES (CALCULATED) ===")
+                # Sort scores from Weakest to Strongest for clarity
+                sorted_scores = sorted(scores.items(), key=lambda item: item[1])
+                for house, score in sorted_scores:
+                    lines.append(f"- House {house}: {score} points")
+                lines.append("")  # Empty line for separation
+
+            # --- SECTION 2: NATAL CHART (The Context) ---
+            # Search for planets in root or inside chart_data
             planets = data.get("planets") or data.get("chart_data", {}).get("planets", {})
 
-            if not planets: return "No planetary data found."
+            if planets:
+                lines.append("=== 👤 NATAL CHART (USER CONTEXT) ===")
+                for name, details in planets.items():
+                    # Safely extract attributes (handle dict vs object)
+                    house = details.get('house') if isinstance(details, dict) else getattr(details, 'house', '?')
+                    sign = details.get('sign') if isinstance(details, dict) else getattr(details, 'sign', '?')
+                    lines.append(f"- {name}: House {house}, Sign {sign}")
 
-            facts = []
-            for name, details in planets.items():
-                # Безопасно достаем значения, даже если details это объект
-                house = details.get('house') if isinstance(details, dict) else getattr(details, 'house', '?')
-                sign = details.get('sign') if isinstance(details, dict) else getattr(details, 'sign', '?')
-                facts.append(f"- {name}: House {house}, Sign {sign}")
+            if not lines:
+                return "No scores or planetary data found."
 
-            return "\n".join(facts)
+            return "\n".join(lines)
+
         except Exception as e:
             return f"Error formatting data: {str(e)}"
 
@@ -75,7 +93,7 @@ class AIEngine:
         Executes the full cycle of astrological consultation generation.
         """
 
-        # --- [НОВОЕ] 1. Генерируем "Чистый Текст" для ИИ ---
+        # --- [STEP 1] Generate "Clean Text" containing Scores + Planets ---
         clean_facts = self._format_planetary_facts(astro_data)
 
         # 1. IDENTIFY KEY POINTS (Strength and Weakness)
@@ -94,8 +112,8 @@ class AIEngine:
         # 3. PROMPT PREPARATION
         prompt_template = ChatPromptTemplate.from_messages([
             ("system", JYOTISH_SYSTEM_PROMPT),
-            # --- [НОВОЕ] Передаем formatted_facts в промпт ---
-            ("user", "PLANETARY FACTS (TRUST THESE):\n{formatted_facts}\n\nFull Planetary Scores: {astro_data}")
+            # --- [STEP 2] Inject the comprehensive formatted facts into the prompt ---
+            ("user", "CRITICAL DATA FOR ANALYSIS (TRUST THESE):\n{formatted_facts}\n\nRaw JSON Data: {astro_data}")
         ])
 
         # 4. OUTPUT CONFIGURATION
@@ -105,19 +123,20 @@ class AIEngine:
         # 5. EXECUTION
         response = await chain.ainvoke({
             "context": context,
-            # --- [НОВОЕ] Передаем нашу переменную ---
+            # --- [STEP 3] Pass our variable ---
             "formatted_facts": clean_facts,
             "astro_data": json.dumps(astro_data, ensure_ascii=False),
             "top_tension": weakest_house,
             "super_power": strongest_house
         })
 
-        # 6 Audit (Logic validation)
+        # 6. Audit (Logic validation)
         audit_results = ResponseAuditor.validate_consultation(astro_data, response)
         if not audit_results["is_valid"]:
             print(f"⚠️ AI Audit Warning: {audit_results['warnings']}")
 
-        # --- [НОВОЕ] Прикрепляем текст к ответу, чтобы main.py мог его сохранить ---
+        # --- [STEP 4] Attach the Full Text to the response object ---
+        # This ensures main.py can extract it and save it to the database for the Dashboard
         response.metadata_context = [d.page_content for d in docs]
         response.debug_formatted_input = clean_facts
 
