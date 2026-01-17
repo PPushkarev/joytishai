@@ -112,22 +112,35 @@ class AIEngine:
             print(f"🚨 RAG ERROR (Игнорируем и идем дальше): {e}")
             context = "Knowledge base temporarily unavailable."
 
+
         # 4. PROMPT PREPARATION
-        # Исправленный шаблон: явно включаем {context} и переменные фокуса
+        # Мы добавляем жесткую инструкцию для поля 'recommendations'
         prompt_template = ChatPromptTemplate.from_messages([
             ("system", JYOTISH_SYSTEM_PROMPT),
             ("user", """
-        SECTION 1: RELEVANT ASTROLOGICAL RULES & REMEDIES (CONTEXT)
-        {context}
+                SECTION 1: KNOWLEDGE BASE (CONTEXT)
+                {context}
 
-        SECTION 2: USER'S CHART DATA (ANALYSIS SOURCE)
-        {full_data_json}
+                SECTION 2: USER'S CHART DATA
+                {full_data_json}
 
-        INSTRUCTIONS:
-        Using the rules from Section 1, analyze the data in Section 2.
-        Pay special attention to the weakest area: {top_tension}
-        Pay special attention to the strongest area: {super_power}
-        """)
+                INSTRUCTIONS:
+                1. Analyze the 'daily_title' based on the strongest positive aspect.
+                2. Write 'astrological_analysis' identifying why {top_tension} is weak and {super_power} is strong.
+                3. Fill 'classic_wisdom' with a direct quote or insight from SECTION 1.
+
+                4. ⚠️ CRITICAL INSTRUCTION FOR 'recommendations' FIELD:
+                   - You MUST generate a list of 3-5 specific actions.
+                   - First, look for remedies in SECTION 1.
+                   - **IF SECTION 1 IS SILENT ON REMEDIES, USE YOUR GENERAL VEDIC KNOWLEDGE.**
+                   - Remedies must be specific:
+                     * "Chant [Mantra Name]" (e.g., Om Suryaya Namaha)
+                     * "Donate [Item]" (e.g., Wheat on Sunday)
+                     * "Avoid [Action]" or "Perform [Service]"
+                   - Do not leave this list empty. Do not write generic advice like "be careful".
+
+                Focus areas for remedies: {top_tension}
+                """)
         ])
 
         structured_llm = self.llm.with_structured_output(AstrologicalConsultation)
