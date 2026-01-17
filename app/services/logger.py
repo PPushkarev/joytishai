@@ -1,10 +1,12 @@
 import datetime
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 # framework for worKing with DB
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+
 load_dotenv()
+
 
 # CREATE CLASS FOR WORKING WITH ATLAS DB FOR LOGGING PURPUSE
 
@@ -15,13 +17,14 @@ class MongoAILogger:
         self.db = self.client.joytishai_db
         self.collection = self.db.ai_logs
 
-# Just counting how much we spent for users quires, what we found in Vector base, raw transit data , AI response for counting
+    # Just counting how much we spent for users quires, what we found in Vector base, raw transit data , AI response for counting
     async def log_request(
             self,
             user_query: str,
             retrieved_docs: List[Dict[str, Any]],
             ai_response: Any,
             usage: Dict[str, int],
+            formatted_input: Optional[str] = None,  # [OK] Новое поле
             model_name: str = "gpt-4o-mini"
     ):
         # How much we spent in OpenAI
@@ -34,6 +37,7 @@ class MongoAILogger:
         log_entry = {
             "timestamp": datetime.datetime.utcnow(),
             "user_query": user_query,
+            "formatted_input": formatted_input,  # [OK] Сохраняем
             "context": retrieved_docs,
             "response": ai_response,
             "stats": {
@@ -50,17 +54,22 @@ class MongoAILogger:
 
         result = await self.collection.insert_one(log_entry)
         return result.inserted_id
-# AS a final we ge id record in DB
 
+    # AS a final we ge id record in DB
 
-
-
-# WE USING THIS FUNCTION TO GET INFORMATION FROM RESPONSE FAST API and get to async def log_request
-    async def log_analytics(self, request, raw_data, final_res, raw_ai_obj):
+    # WE USING THIS FUNCTION TO GET INFORMATION FROM RESPONSE FAST API and get to async def log_request
+    async def log_analytics(self, request, raw_data, final_res, raw_ai_obj, formatted_text=None):
         """INTEGRATION WHIT  FastAPI"""
 
         try:
-            docs = raw_data.get("relevant_texts", []) if isinstance(raw_data, dict) else []
+            docs = []
+
+            # 1. Пытаемся достать контекст из ответа AI (мы его туда прицепили в AIEngine)
+            if hasattr(final_res, 'metadata_context'):
+                docs = final_res.metadata_context
+            # 2. Если нет, пробуем из сырых данных (старый способ)
+            elif isinstance(raw_data, dict):
+                docs = raw_data.get("relevant_texts", [])
 
             # Извлекаем usage из объекта OpenAI
             if raw_ai_obj and hasattr(raw_ai_obj, 'usage'):
@@ -76,7 +85,8 @@ class MongoAILogger:
                 user_query=str(request.chart_data),
                 retrieved_docs=docs,
                 ai_response=final_res,
-                usage=usage_data
+                usage=usage_data,  # <--- ЗАПЯТУЮ ДОБАВИЛ
+                formatted_input=formatted_text  # [OK] Передаем дальше
             )
         except Exception as e:
             print(f"Logging error: {e}")

@@ -182,7 +182,8 @@ def main():
 
                 # КОЛОНКА 3: RAG КОНТЕКСТ
                 with c3:
-                    st.secondary("📚 3. RAG Context")
+                    # ИСПРАВЛЕНО ЗДЕСЬ: st.secondary -> st.success
+                    st.success("📚 3. RAG Context")
                     st.caption("Found in Knowledge Base.")
                     context_data = log.get("context")
 
