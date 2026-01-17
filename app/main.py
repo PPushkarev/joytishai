@@ -72,42 +72,49 @@ class ForecastResponse(BaseModel):
 
 
 # --- HELPER FUNCTIONS AUDIT AI CONSULTATION THAT WE GET---
-
 async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, Dict[str, Any], Optional[Any]]:
     """
     Executes AI generation with a retry mechanism and response auditing.
     """
     max_retries = 3
     final_consultation = None
-    last_raw_response = None
+
+    # [FIX] Initialize variable to hold the raw object (which contains debug info)
+    raw_object_response = None
+
     audit_results = {"is_valid": False, "warnings": ["Process failed or not completed"], "audit_score": 0}
 
     for attempt in range(max_retries):
         try:
             result = await ai_engine.generate_consultation(raw_data)
 
+            # [FIX] Logic to capture the raw response object
             if isinstance(result, tuple) and len(result) == 2:
-                ai_interpretation, last_raw_response = result
+                ai_interpretation, raw_object_response = result
             else:
                 ai_interpretation = result
-                last_raw_response = None
+                # [CRITICAL]: Do not set to None! Save the result object.
+                # This object carries the '.debug_formatted_input' attached in AIEngine.
+                raw_object_response = result
 
+                # Validation process
             if hasattr(ai_interpretation, "model_dump"):
                 audit_results = ResponseAuditor.validate_consultation(raw_data, ai_interpretation)
+
                 if audit_results["is_valid"]:
                     final_consultation = ai_interpretation.model_dump()
-                    return final_consultation, audit_results, last_raw_response
+                    # Return the raw object as the 3rd argument so logger can access it
+                    return final_consultation, audit_results, raw_object_response
             else:
-                return ai_interpretation, {"is_valid": True, "warnings": ["Plain text response"]}, last_raw_response
+                # Handle plain text response case
+                return ai_interpretation, {"is_valid": True, "warnings": ["Plain text response"]}, raw_object_response
 
         except Exception as e:
             logger.error(f"Error on attempt {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                return f"AI Generation Error: {str(e)}", audit_results, last_raw_response
+                return f"AI Generation Error: {str(e)}", audit_results, raw_object_response
 
-    return "Failed to generate valid response after retries", audit_results, last_raw_response
-
-
+    return "Failed to generate valid response after retries", audit_results, raw_object_response
 
 
 
@@ -117,6 +124,12 @@ async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_t
     Write info in DB
     """
 
+    # [FIX 1] Extract the 'debug_formatted_input' we attached in AIEngine
+    extracted_formatted_text = None
+    if raw_tokens and hasattr(raw_tokens, "debug_formatted_input"):
+        extracted_formatted_text = raw_tokens.debug_formatted_input
+
+    # Prepare token data (Keep existing logic for safety)
     safe_tokens = raw_tokens
     try:
         if hasattr(raw_tokens, "model_dump"):
@@ -127,21 +140,20 @@ async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_t
             safe_tokens = str(raw_tokens)
     except Exception as e:
         safe_tokens = f"Error serializing tokens: {str(e)}"
-    try:
 
+    try:
+        # [FIX 2] Pass 'formatted_text' to the logger
+        # We pass 'raw_tokens' as the 4th argument so the logger can extract .usage if it exists
         await ai_logger.log_analytics(
             user_data,
             context,
             answer,
-            safe_tokens
+            raw_tokens,
+            formatted_text=extracted_formatted_text # <--- NEW ARGUMENT
         )
 
     except Exception as e:
-
         print(f"❌ [LOG] Error loggin functin: {e}")
-
-
-
 
 
 
