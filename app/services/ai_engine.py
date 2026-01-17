@@ -71,12 +71,28 @@ class AIEngine:
             strongest_house = "general balance"
         # --- [КОНЕЦ ИЗМЕНЕНИЙ] ---
 
-        # 3. RAG RETRIEVAL
-        retriever = self.vsm.get_retriever()
-        retriever.search_kwargs = {"k": 6}
-        query = f"Remedies for {weakest_house} AND benefits of {strongest_house}"
-        docs = await retriever.ainvoke(query)
-        context = "\n\n".join([d.page_content for d in docs])
+            # 3. RAG RETRIEVAL
+            retriever = self.vsm.get_retriever()
+            retriever.search_kwargs = {"k": 6}  # Можно временно увеличить до 10
+
+            # Уточненный запрос (как мы обсуждали)
+            query = f"Remedies, Mantras, Donations for weak {weakest_house}. Strengths of {strongest_house}"
+
+            print(f"🔎 DEBUG: Ищу в базе: '{query}'")  # <--- ЛОГ ЗАПРОСА
+
+            docs = await retriever.ainvoke(query)
+
+            # --- [ВСТАВИТЬ ЭТОТ БЛОК ДЛЯ ПРОВЕРКИ] ---
+            print(f"🔎 DEBUG: Найдено документов: {len(docs)}")
+            if not docs:
+                print("🚨 ОШИБКА: RAG вернул пустой список! База знаний молчит.")
+            else:
+                for i, doc in enumerate(docs):
+                    # Печатаем первые 200 символов каждого найденного куска
+                    print(f"📄 Doc {i + 1}: {doc.page_content[:200]}...")
+            # -----------------------------------------
+
+            context = "\n\n".join([d.page_content for d in docs])
 
         # 4. PROMPT PREPARATION
         # Исправленный шаблон: явно включаем {context} и переменные фокуса
