@@ -118,30 +118,17 @@ class AIEngine:
         prompt_template = ChatPromptTemplate.from_messages([
             ("system", JYOTISH_SYSTEM_PROMPT),
             ("user", """
-                SECTION 1: KNOWLEDGE BASE (CONTEXT)
+                CONTEXT (RAG):
                 {context}
 
-                SECTION 2: USER'S CHART DATA
+                USER DATA:
                 {full_data_json}
 
-                INSTRUCTIONS:
-                1. Analyze 'daily_title' based on {super_power}.
-                2. Write 'astrological_analysis' (Why {top_tension} is weak vs {super_power} is strong).
-                3. Fill 'classic_wisdom' from SECTION 1.
+                VARIABLES:
+                - Strongest House: {super_power}
+                - Weakest House: {top_tension}
 
-                4. 'recommendations' (CRITICAL STEP):
-                   - You MUST return a list with EXACTLY ONE string: ["Action Text"].
-                   - STRATEGY: Look at the resource in {super_power} and turn it into a PHYSICAL VERB to solve the problem in {top_tension}.
-
-                   - LOGIC PATTERNS (Use these):
-                     * If Strong 4th House (Home) -> "Stay at home to feel safe."
-                     * If Strong 9th House (Wisdom) -> "Read a book or study."
-                     * If Strong 11th House (Friends) -> "Go out with friends."
-
-                   - EXAMPLE OUTPUT: 
-                     "Since your 8th House carries risks, you should literally stay at home (House 4) and study ancient texts (House 9) to create a protective buffer."
-
-                Focus areas: {top_tension}
+                Generate JSON response now.
                 """)
         ])
 
