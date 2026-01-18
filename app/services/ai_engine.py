@@ -129,15 +129,11 @@ class AIEngine:
                 2. Write 'astrological_analysis' identifying why {top_tension} is weak and {super_power} is strong.
                 3. Fill 'classic_wisdom' with a direct quote or insight from SECTION 1.
 
-                4. ⚠️ CRITICAL INSTRUCTION FOR 'recommendations' FIELD:
-                   - You MUST generate a list of 3-5 specific actions.
-                   - First, look for remedies in SECTION 1.
-                   - **IF SECTION 1 IS SILENT ON REMEDIES, USE YOUR GENERAL VEDIC KNOWLEDGE.**
-                   - Remedies must be specific:
-                     * "Chant [Mantra Name]" (e.g., Om Suryaya Namaha)
-                     * "Donate [Item]" (e.g., Wheat on Sunday)
-                     * "Avoid [Action]" or "Perform [Service]"
-                   - Do not leave this list empty. Do not write generic advice like "be careful".
+                4. 'recommendations' (MANDATORY ONE ACTION):
+                - Generate EXACTLY ONE string: ["Action Text"].
+                - LOGIC: Look at the problem in {top_tension} -> solve it using {super_power}.
+                - Example: "Since your Health (House 6) is weak, use your Friends (House 11) to find a good doctor."
+                - DO NOT output a list of 3 items. Only 1 specific strategic advice.
 
                 Focus areas for remedies: {top_tension}
                 """)
