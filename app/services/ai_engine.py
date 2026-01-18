@@ -1,15 +1,18 @@
 import json
 import os
+
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+from app.schemas.consultation import AstrologicalConsultation
 from app.services.prompts import JYOTISH_SYSTEM_PROMPT
 from app.services.validator import ResponseAuditor
 from app.services.vector_store import VectorStoreManager
-from app.schemas.consultation import AstrologicalConsultation
 
 # Load environment variables
 load_dotenv()
+
 
 class AIEngine:
     """
@@ -25,9 +28,7 @@ class AIEngine:
         temp = float(os.getenv("AI_TEMPERATURE", 0.3))
 
         self.llm = ChatOpenAI(
-            model=model_name,
-            temperature=temp,
-            openai_api_key=api_key
+            model=model_name, temperature=temp, openai_api_key=api_key
         )
 
         self.vsm = VectorStoreManager()
@@ -44,7 +45,9 @@ class AIEngine:
         # 2. Key Points Analysis (Находим ВСЕ дома с мин/макс баллами)
 
         # 1. Достаем баллы из правильного места (derived_tables или summary_scores)
-        raw_scores = astro_data.get("derived_tables", {}).get("houses", {}).get("scores", {})
+        raw_scores = (
+            astro_data.get("derived_tables", {}).get("houses", {}).get("scores", {})
+        )
         if not raw_scores:
             raw_scores = astro_data.get("summary_scores", {})
 
@@ -71,9 +74,6 @@ class AIEngine:
             strongest_house = "general balance"
         # --- [КОНЕЦ ИЗМЕНЕНИЙ] ---
 
-
-
-
         # # 3. RAG RETRIEVAL
         # retriever = self.vsm.get_retriever()
         # retriever.search_kwargs = {"k": 6}
@@ -84,7 +84,9 @@ class AIEngine:
         # 3. RAG RETRIEVAL (С ЗАЩИТОЙ ОТ ОШИБОК)
         # Инициализируем переменную ЗАРАНЕЕ, чтобы избежать UnboundLocalError
         context = ""
-        docs = []  # <--- ВАЖНО: Инициализируем список пустым, чтобы не было ошибки UnboundLocalError в конце
+        docs = (
+            []
+        )  # <--- ВАЖНО: Инициализируем список пустым, чтобы не было ошибки UnboundLocalError в конце
 
         try:
             retriever = self.vsm.get_retriever()
@@ -107,7 +109,9 @@ class AIEngine:
                 # Лог для проверки глазами
                 print("📄 --- НАЧАЛО RAG КОНТЕКСТА ---")
                 for i, d in enumerate(docs):
-                    print(f"📄 DOC [{i}]: {d.page_content.replace(chr(10), ' ')[:100]}...")
+                    print(
+                        f"📄 DOC [{i}]: {d.page_content.replace(chr(10), ' ')[:100]}..."
+                    )
                 print("📄 --- КОНЕЦ RAG КОНТЕКСТА ---")
 
                 context = "\n\n".join([d.page_content for d in docs])
@@ -119,12 +123,14 @@ class AIEngine:
             print(f"🚨 RAG ERROR: {e}")
             context = "Knowledge base unavailable."
 
-
         # 4. PROMPT PREPARATION
         # Мы добавляем жесткую инструкцию для поля 'recommendations'
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", JYOTISH_SYSTEM_PROMPT),
-            ("user", """
+        prompt_template = ChatPromptTemplate.from_messages(
+            [
+                ("system", JYOTISH_SYSTEM_PROMPT),
+                (
+                    "user",
+                    """
                 CONTEXT (RAG):
                 {context}
 
@@ -136,21 +142,25 @@ class AIEngine:
                 - Weakest House: {top_tension}
 
                 Generate JSON response now.
-                """)
-        ])
+                """,
+                ),
+            ]
+        )
 
         structured_llm = self.llm.with_structured_output(AstrologicalConsultation)
         chain = prompt_template | structured_llm
 
         # 5. EXECUTION
-        response = await chain.ainvoke({
-            "context": context,
-            # Передаем полный дамп в промпт
-            "full_data_json": full_json_dump,
-            "astro_data": full_json_dump,
-            "top_tension": weakest_house,
-            "super_power": strongest_house
-        })
+        response = await chain.ainvoke(
+            {
+                "context": context,
+                # Передаем полный дамп в промпт
+                "full_data_json": full_json_dump,
+                "astro_data": full_json_dump,
+                "top_tension": weakest_house,
+                "super_power": strongest_house,
+            }
+        )
 
         # 6. Audit
         audit_results = ResponseAuditor.validate_consultation(astro_data, response)
@@ -162,8 +172,6 @@ class AIEngine:
         response.debug_formatted_input = full_json_dump
 
         return response
-
-
 
     # старая функция работала
     # async def generate_consultation(self, astro_data: dict) -> AstrologicalConsultation:

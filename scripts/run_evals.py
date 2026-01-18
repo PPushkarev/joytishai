@@ -1,12 +1,10 @@
-
-
-
 # STARTING EVALUATE OUR AI CONSULTATION USING MODEL GPT -4
 # scripts/run_evals.py
 
 import asyncio
 import os
 import sys
+
 from dotenv import load_dotenv
 
 # Add project root to system path so we can import 'app'

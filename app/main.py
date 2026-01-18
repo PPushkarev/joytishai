@@ -1,17 +1,18 @@
 import logging
-import uvicorn
 import os
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
-from typing import Any, Dict, Tuple, Optional, List
+from typing import Any, Dict, List, Optional, Tuple
+
+import uvicorn
 from dotenv import load_dotenv
-from app.services.judge_engine import execute_judge_cycle
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
 # Import Schemas
 from app.schemas.forecast import ForecastRequest, ForecastResponse
-
+from app.services.ai_engine import AIEngine
 # Service Imports
 from app.services.astro_client import AstroEngineClient
-from app.services.ai_engine import AIEngine
+from app.services.judge_engine import execute_judge_cycle
 from app.services.logger import MongoAILogger
 from app.services.validator import ResponseAuditor
 
@@ -32,6 +33,7 @@ ai_logger = MongoAILogger()
 
 # --- DATA SCHEMAS ---
 
+
 class PlanetDetail(BaseModel):
     degree: str
     sign: str
@@ -42,6 +44,7 @@ class PlanetDetail(BaseModel):
     retrograde: bool
     display_name: str
     longitude: Optional[float] = None
+
 
 class ClientChart(BaseModel):
     name: str
@@ -57,11 +60,13 @@ class ClientChart(BaseModel):
     sign: str
     planets: Dict[str, PlanetDetail]
 
+
 class ForecastRequest(BaseModel):
     user_id: Optional[int] = Field(None, json_schema_extra={"example": 500123445})
     chart_data: ClientChart
     transit_date: str = Field(..., json_schema_extra={"example": "2026-01-02"})
     language: str = Field(default="en")
+
 
 class ForecastResponse(BaseModel):
     daily_title: str
@@ -70,9 +75,10 @@ class ForecastResponse(BaseModel):
     recommendations: List[str]
 
 
-
 # --- HELPER FUNCTIONS AUDIT AI CONSULTATION THAT WE GET---
-async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, Dict[str, Any], Optional[Any]]:
+async def run_safe_generation(
+    raw_data: Any, ai_engine: AIEngine
+) -> Tuple[Any, Dict[str, Any], Optional[Any]]:
     """
     Executes AI generation with a retry mechanism and response auditing.
     """
@@ -82,7 +88,11 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
     # [FIX] Initialize variable to hold the raw object (which contains debug info)
     raw_object_response = None
 
-    audit_results = {"is_valid": False, "warnings": ["Process failed or not completed"], "audit_score": 0}
+    audit_results = {
+        "is_valid": False,
+        "warnings": ["Process failed or not completed"],
+        "audit_score": 0,
+    }
 
     for attempt in range(max_retries):
         try:
@@ -99,7 +109,9 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
 
                 # Validation process
             if hasattr(ai_interpretation, "model_dump"):
-                audit_results = ResponseAuditor.validate_consultation(raw_data, ai_interpretation)
+                audit_results = ResponseAuditor.validate_consultation(
+                    raw_data, ai_interpretation
+                )
 
                 if audit_results["is_valid"]:
                     final_consultation = ai_interpretation.model_dump()
@@ -107,19 +119,32 @@ async def run_safe_generation(raw_data: Any, ai_engine: AIEngine) -> Tuple[Any, 
                     return final_consultation, audit_results, raw_object_response
             else:
                 # Handle plain text response case
-                return ai_interpretation, {"is_valid": True, "warnings": ["Plain text response"]}, raw_object_response
+                return (
+                    ai_interpretation,
+                    {"is_valid": True, "warnings": ["Plain text response"]},
+                    raw_object_response,
+                )
 
         except Exception as e:
             logger.error(f"Error on attempt {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                return f"AI Generation Error: {str(e)}", audit_results, raw_object_response
+                return (
+                    f"AI Generation Error: {str(e)}",
+                    audit_results,
+                    raw_object_response,
+                )
 
-    return "Failed to generate valid response after retries", audit_results, raw_object_response
-
+    return (
+        "Failed to generate valid response after retries",
+        audit_results,
+        raw_object_response,
+    )
 
 
 # --- SIMPL FUNCTION FOR ATLAS DB LOGGING ANSERS INFORMATION FOR AI JUDGE---
-async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_tokens: Any):
+async def simple_log_execution(
+    user_data: Any, context: Any, answer: dict, raw_tokens: Any
+):
     """
     Write info in DB
     """
@@ -149,17 +174,15 @@ async def simple_log_execution(user_data: Any, context: Any, answer: dict, raw_t
             context,
             answer,
             raw_tokens,
-            formatted_text=extracted_formatted_text # <--- NEW ARGUMENT
+            formatted_text=extracted_formatted_text,  # <--- NEW ARGUMENT
         )
 
     except Exception as e:
         print(f"❌ [LOG] Error loggin functin: {e}")
 
 
-
 @app.post("/api/v1/forecast/generate", tags=["Core & Analytics"])
 async def daily_forecast_analytics(request: ForecastRequest):
-
     """
     Main endpoint: Consultation -> Validation -> Simple Logging
     """
@@ -168,33 +191,30 @@ async def daily_forecast_analytics(request: ForecastRequest):
     raw_data = await astro_client.get_transit_data(request.model_dump())
 
     if isinstance(raw_data, dict) and "error" in raw_data:
-        raise HTTPException(status_code=502, detail=f"Astro Service Error: {raw_data['error']}")
+        raise HTTPException(
+            status_code=502, detail=f"Astro Service Error: {raw_data['error']}"
+        )
 
     if isinstance(raw_data, dict):
         raw_data["chart_data"] = request.chart_data.model_dump()
 
     # 2. Answer generation(AI + Validation)
-    final_consultation, audit_results, raw_response = await run_safe_generation(raw_data, ai_engine)
+    final_consultation, audit_results, raw_response = await run_safe_generation(
+        raw_data, ai_engine
+    )
 
     # 3. SIMPLE LOGGING ( BackgroundTasks)
-    await simple_log_execution(
-        request,
-        raw_data,
-        final_consultation,
-        raw_response
-    )
+    await simple_log_execution(request, raw_data, final_consultation, raw_response)
 
     # 4. get result
     return {
         "source_data": raw_data,
         "ai_analysis": final_consultation,
-        "audit_report": audit_results
+        "audit_report": audit_results,
     }
 
 
-
 # FUNCTION FOR JUDGE ANSWERS STATISTIC MODEL
-
 
 
 @app.get("/api/v1/analytics/stats", tags=["Core & Analytics"])
@@ -206,16 +226,14 @@ async def get_analytics_summary():
 
     # 1. Calculate statistics (Aggregation Pipeline)
     pipeline = [
-        {
-            "$match": { "evaluation.status": "evaluated" }  # Filter: only evaluated logs
-        },
+        {"$match": {"evaluation.status": "evaluated"}},  # Filter: only evaluated logs
         {
             "$group": {
                 "_id": None,
                 "total_consultations": {"$sum": 1},
                 "avg_faithfulness": {"$avg": "$evaluation.faithfulness"},
                 "avg_relevancy": {"$avg": "$evaluation.relevancy"},
-                "avg_score": {"$avg": "$evaluation.score"}
+                "avg_score": {"$avg": "$evaluation.score"},
             }
         },
         {
@@ -223,19 +241,28 @@ async def get_analytics_summary():
                 "_id": 0,
                 "total_consultations": 1,
                 "avg_faithfulness": {"$round": ["$avg_faithfulness", 2]},
-                "avg_relevancy": {"$round": ["$avg_relevancy", 2]}
+                "avg_relevancy": {"$round": ["$avg_relevancy", 2]},
             }
-        }
+        },
     ]
 
     # Execute the pipeline
     stats = await ai_logger.collection.aggregate(pipeline).to_list(length=1)
 
     # 2. Fetch recent evaluated logs for display
-    recent_logs = await ai_logger.collection.find(
-        {"evaluation.status": "evaluated"},
-        {"response": 0, "context": 0, "source_data": 0} # Exclude heavy fields to optimize response speed
-    ).sort("timestamp", -1).limit(5).to_list(length=5)
+    recent_logs = (
+        await ai_logger.collection.find(
+            {"evaluation.status": "evaluated"},
+            {
+                "response": 0,
+                "context": 0,
+                "source_data": 0,
+            },  # Exclude heavy fields to optimize response speed
+        )
+        .sort("timestamp", -1)
+        .limit(5)
+        .to_list(length=5)
+    )
 
     # 3. SERIALIZATION FIX: Convert ObjectId to String
     # FastAPI cannot serialize binary MongoDB ObjectIds to JSON, so we convert them manually.
@@ -245,7 +272,7 @@ async def get_analytics_summary():
 
     return {
         "statistics": stats[0] if stats else "No data yet",
-        "recent_evaluations": recent_logs
+        "recent_evaluations": recent_logs,
     }
 
 
@@ -266,8 +293,9 @@ async def trigger_judge_manual(background_tasks: BackgroundTasks):
 
     return {
         "message": "Judge started in background 🚀",
-        "info": "Results will appear in the dashboard shortly."
+        "info": "Results will appear in the dashboard shortly.",
     }
+
 
 # --- SERVER ENTRY POINT ---
 if __name__ == "__main__":

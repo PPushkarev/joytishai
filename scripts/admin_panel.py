@@ -1,15 +1,12 @@
-import streamlit as st
+import json
+from datetime import datetime
+
 import pandas as pd
 import requests
-from datetime import datetime
-import json
+import streamlit as st
 
 # --- CONFIGURATION ---
-st.set_page_config(
-    page_title="JyotishAI Monitor",
-    page_icon="🔮",
-    layout="wide"
-)
+st.set_page_config(page_title="JyotishAI Monitor", page_icon="🔮", layout="wide")
 
 # ⚠️ ВАЖНО: УБЕДИСЬ, ЧТО ЭТО ТВОЙ АКТУАЛЬНЫЙ ДОМЕН RAILWAY
 BASE_URL = "https://web-production-991f4.up.railway.app"
@@ -19,7 +16,8 @@ API_STATS_URL = f"{BASE_URL}/api/v1/analytics/stats"
 API_TRIGGER_URL = f"{BASE_URL}/api/v1/admin/run-judge"
 
 # Custom Styling
-st.markdown("""
+st.markdown(
+    """
     <style>
     .main { background-color: #f5f7f9; }
     .stMetric {
@@ -33,7 +31,9 @@ st.markdown("""
         border-radius: 5px;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # --- APP LOGIC ---
@@ -90,13 +90,19 @@ def main():
     with kpi1:
         st.metric("Total Consultations", stats.get("total_consultations", 0))
     with kpi2:
-        st.metric("Avg Faithfulness", f"{faith_score}/5",
-                  delta="Good" if faith_score > 3.5 else "Low",
-                  delta_color="normal" if faith_score > 3.5 else "inverse")
+        st.metric(
+            "Avg Faithfulness",
+            f"{faith_score}/5",
+            delta="Good" if faith_score > 3.5 else "Low",
+            delta_color="normal" if faith_score > 3.5 else "inverse",
+        )
     with kpi3:
-        st.metric("Avg Relevancy", f"{rel_score}/5",
-                  delta="Good" if rel_score > 3.5 else "Low",
-                  delta_color="normal" if rel_score > 3.5 else "inverse")
+        st.metric(
+            "Avg Relevancy",
+            f"{rel_score}/5",
+            delta="Good" if rel_score > 3.5 else "Low",
+            delta_color="normal" if rel_score > 3.5 else "inverse",
+        )
     with kpi4:
         st.metric("Overall Score", f"{stats.get('avg_score', 0) or 0:.2f}/5")
 
@@ -118,14 +124,16 @@ def main():
 
             eval_data = log.get("evaluation", {})
 
-            table_rows.append({
-                "ID": log.get("_id"),
-                "Time": ts_display,
-                "User Query": str(log.get("user_query"))[:60] + "...",
-                "Faithfulness": eval_data.get("faithfulness"),
-                "Relevancy": eval_data.get("relevancy"),
-                "Judge Comment": eval_data.get("comment", "")
-            })
+            table_rows.append(
+                {
+                    "ID": log.get("_id"),
+                    "Time": ts_display,
+                    "User Query": str(log.get("user_query"))[:60] + "...",
+                    "Faithfulness": eval_data.get("faithfulness"),
+                    "Relevancy": eval_data.get("relevancy"),
+                    "Judge Comment": eval_data.get("comment", ""),
+                }
+            )
 
         df = pd.DataFrame(table_rows)
 
@@ -133,15 +141,15 @@ def main():
         def highlight_bad_rows(row):
             try:
                 if float(row["Faithfulness"] or 0) < 3:
-                    return ['background-color: #ffcccc'] * len(row)
+                    return ["background-color: #ffcccc"] * len(row)
             except:
                 pass
-            return [''] * len(row)
+            return [""] * len(row)
 
         st.dataframe(
             df.style.apply(highlight_bad_rows, axis=1),
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
         )
 
         # --- FORENSIC INSPECTOR (Глубокий анализ) ---
@@ -153,7 +161,9 @@ def main():
 
         if selected_id:
             # Находим полный объект лога
-            log = next((item for item in recent_logs if item["_id"] == selected_id), None)
+            log = next(
+                (item for item in recent_logs if item["_id"] == selected_id), None
+            )
 
             if log:
                 # === СЕКЦИЯ 1: ПОТОК ДАННЫХ (3 КОЛОНКИ) ===
@@ -177,7 +187,9 @@ def main():
                     st.caption("Converted text for AI. If empty = old log.")
 
                     # Пытаемся достать новое поле
-                    formatted_input = log.get("formatted_input", "⚠️ Not saved (Old Log)")
+                    formatted_input = log.get(
+                        "formatted_input", "⚠️ Not saved (Old Log)"
+                    )
                     st.text_area("Prompt Content", formatted_input, height=350)
 
                 # КОЛОНКА 3: RAG КОНТЕКСТ

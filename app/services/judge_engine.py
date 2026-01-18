@@ -1,11 +1,13 @@
 # app/services/judge_engine.py
 #
 
-import os
 import json
 import logging
+import os
+
 from motor.motor_asyncio import AsyncIOMotorClient
 from openai import AsyncOpenAI
+
 from app.services.prompts import EVAL_PROMPT
 
 # Configure Logger
@@ -29,7 +31,9 @@ async def execute_judge_cycle(mongo_uri: str):
     print("👨‍⚖️ AI Judge started working...")
 
     # Fetch 5 oldest pending logs to process
-    cursor = collection.find({"evaluation.status": "pending"}).sort("timestamp", 1).limit(5)
+    cursor = (
+        collection.find({"evaluation.status": "pending"}).sort("timestamp", 1).limit(5)
+    )
     logs = await cursor.to_list(length=5)
 
     if not logs:
@@ -44,7 +48,11 @@ async def execute_judge_cycle(mongo_uri: str):
             # 1. Prepare Data
             # Handle list or string context
             context_list = log.get("context", []) or []
-            context_str = " ".join(context_list) if isinstance(context_list, list) else str(context_list)
+            context_str = (
+                " ".join(context_list)
+                if isinstance(context_list, list)
+                else str(context_list)
+            )
 
             # Handle query serialization
             query_raw = log.get("user_query", "")
@@ -58,15 +66,15 @@ async def execute_judge_cycle(mongo_uri: str):
             # 2. Call GPT-4o
             completion = await openai_client.chat.completions.create(
                 model="gpt-4o",
-                messages=[{
-                    "role": "user",
-                    "content": EVAL_PROMPT.format(
-                        context=context_str,
-                        query=query_str,
-                        response=response_text
-                    )
-                }],
-                response_format={"type": "json_object"}
+                messages=[
+                    {
+                        "role": "user",
+                        "content": EVAL_PROMPT.format(
+                            context=context_str, query=query_str, response=response_text
+                        ),
+                    }
+                ],
+                response_format={"type": "json_object"},
             )
 
             # 3. Parse and Save Results
@@ -77,13 +85,15 @@ async def execute_judge_cycle(mongo_uri: str):
 
             await collection.update_one(
                 {"_id": log["_id"]},
-                {"$set": {
-                    "evaluation.faithfulness": result.get("faithfulness"),
-                    "evaluation.relevancy": result.get("relevancy"),
-                    "evaluation.status": "evaluated",
-                    "evaluation.comment": result.get("comment"),
-                    "evaluation.score": avg_score
-                }}
+                {
+                    "$set": {
+                        "evaluation.faithfulness": result.get("faithfulness"),
+                        "evaluation.relevancy": result.get("relevancy"),
+                        "evaluation.status": "evaluated",
+                        "evaluation.comment": result.get("comment"),
+                        "evaluation.score": avg_score,
+                    }
+                },
             )
             print(f"✅ Evaluated Log ID: {log['_id']} | Score: {avg_score}")
             count += 1
@@ -94,7 +104,12 @@ async def execute_judge_cycle(mongo_uri: str):
             # Mark as error to prevent infinite loops on bad data
             await collection.update_one(
                 {"_id": log["_id"]},
-                {"$set": {"evaluation.status": "error", "evaluation.error_msg": str(e)}}
+                {
+                    "$set": {
+                        "evaluation.status": "error",
+                        "evaluation.error_msg": str(e),
+                    }
+                },
             )
 
     return {"status": "success", "processed": count}

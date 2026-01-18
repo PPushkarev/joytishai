@@ -1,5 +1,7 @@
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
+
 
 # Описание данных по конкретной планете
 class PlanetInfo(BaseModel):
@@ -12,6 +14,7 @@ class PlanetInfo(BaseModel):
     retrograde: bool
     display_name: str
     longitude: Optional[float] = None
+
 
 # Структура натальной карты
 class ClientChart(BaseModel):
@@ -28,10 +31,12 @@ class ClientChart(BaseModel):
     sign: str
     planets: Dict[str, PlanetInfo]
 
+
 # Финальный запрос, который приходит от бота
 class ForecastRequest(BaseModel):
     chart_data: ClientChart
     transit_date: str
+
 
 # То, что мы вернем боту после работы ИИ
 class ForecastResponse(BaseModel):

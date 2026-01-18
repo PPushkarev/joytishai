@@ -1,5 +1,7 @@
-import pytest
 import os
+
+import pytest
+
 from app.services.vector_store import VectorStoreManager
 
 
@@ -29,7 +31,7 @@ async def test_knowledge_base_multi_source():
     assert len(docs) > 0, "RAG Error: No documents retrieved from the vector store!"
 
     # Extract unique source filenames from the metadata
-    sources = set([os.path.basename(d.metadata['source']) for d in docs])
+    sources = set([os.path.basename(d.metadata["source"]) for d in docs])
 
     print(f"\n✅ SUCCESS: Retrieved {len(docs)} relevant chunks.")
     print(f"📚 Sources identified in the analysis ({len(sources)}): {sources}")
@@ -38,11 +40,15 @@ async def test_knowledge_base_multi_source():
     # 4. Display one representative sample for each identified source
     for source in sources:
         # Find the most relevant chunk for this specific source
-        sample_doc = next(d for d in docs if os.path.basename(d.metadata['source']) == source)
+        sample_doc = next(
+            d for d in docs if os.path.basename(d.metadata["source"]) == source
+        )
 
         print(f"📖 SOURCE: {source}")
         print(f"📝 CONTENT SAMPLE: {sample_doc.page_content[:200]}...")
         print("-" * 60)
 
     # Final assertion: Check if at least one book was found
-    assert len(sources) >= 1, "RAG Error: No source metadata found in retrieved documents."
+    assert (
+        len(sources) >= 1
+    ), "RAG Error: No source metadata found in retrieved documents."

@@ -1,11 +1,13 @@
 import logging
+
 from app.schemas.consultation import AstrologicalConsultation
+
 # Setup logging to track audit results in the console
 logger = logging.getLogger(__name__)
 
 
-
 # CHEKING ANWERS TO OUR PATTER AND GET SCORE
+
 
 class ResponseAuditor:
     """
@@ -14,12 +16,10 @@ class ResponseAuditor:
     """
 
     @staticmethod
-    def validate_consultation(astro_data: dict, ai_response: AstrologicalConsultation) -> dict:
-        results = {
-            "is_valid": True,
-            "warnings": [],
-            "audit_score": 100
-        }
+    def validate_consultation(
+        astro_data: dict, ai_response: AstrologicalConsultation
+    ) -> dict:
+        results = {"is_valid": True, "warnings": [], "audit_score": 100}
 
         # --- 1. HOUSE STRENGTH CONSISTENCY CHECK ---
         # Get the summary scores to identify real strong/weak spots
@@ -37,19 +37,27 @@ class ResponseAuditor:
                 positive_keywords = ["perfect", "ideal", "flawless", "no risks"]
                 if any(word in analysis_lower for word in positive_keywords):
                     results["warnings"].append(
-                        "Tone Mismatch: Critical weakness detected, but AI tone is overly optimistic.")
+                        "Tone Mismatch: Critical weakness detected, but AI tone is overly optimistic."
+                    )
                     results["audit_score"] -= 30
 
         # --- 2. RECOMMENDATIONS STRUCTURE CHECK ---
         # Ensure that recommendations is a list with at least 2 items
-        if not isinstance(ai_response.recommendations, list) or len(ai_response.recommendations) < 1:
+        if (
+            not isinstance(ai_response.recommendations, list)
+            or len(ai_response.recommendations) < 1
+        ):
             results["is_valid"] = False
-            results["warnings"].append("Structure Error: Recommendations must be a list of at least 1 items.")
+            results["warnings"].append(
+                "Structure Error: Recommendations must be a list of at least 1 items."
+            )
             results["audit_score"] -= 40
 
         # --- 3. RAG CONTEXT CHECK ---
         if len(ai_response.classic_wisdom) < 30:
-            results["warnings"].append("Content Warning: Classical wisdom field is too short or generic.")
+            results["warnings"].append(
+                "Content Warning: Classical wisdom field is too short or generic."
+            )
             results["audit_score"] -= 20
 
         # Final validity check
@@ -57,6 +65,8 @@ class ResponseAuditor:
             results["is_valid"] = False
 
         if not results["is_valid"]:
-            logger.error(f"❌ AUDIT FAILED | Score: {results['audit_score']} | Reasons: {results['warnings']}")
+            logger.error(
+                f"❌ AUDIT FAILED | Score: {results['audit_score']} | Reasons: {results['warnings']}"
+            )
 
         return results

@@ -1,13 +1,13 @@
-
 # FIRST STEP MAKE A REQUEST TO JOYTISH API SERVER AND GET RESOPNSE JSON
 
 
+import os
 
 import httpx
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
 
 class AstroEngineClient:
     """
@@ -21,7 +21,6 @@ class AstroEngineClient:
         self.endpoint = os.getenv("ASTRO_CALCULATE_ENDPOINT", "/api/v1/analyze")
         # Setting reasonable timeouts for the external API call
         self.timeout = httpx.Timeout(15.0, connect=5.0)
-
 
     async def get_transit_data(self, request_payload: dict):
         """
@@ -46,7 +45,7 @@ class AstroEngineClient:
             except httpx.HTTPStatusError as e:
                 return {
                     "error": f"API error: {e.response.status_code}",
-                    "detail": e.response.text
+                    "detail": e.response.text,
                 }
             except httpx.RequestError as e:
                 return {"error": f"Connection failed: {str(e)}"}

@@ -1,14 +1,16 @@
 import datetime
 import os
 from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
 # framework for worKing with DB
 from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
 
 load_dotenv()
 
 
 # CREATE CLASS FOR WORKING WITH ATLAS DB FOR LOGGING PURPUSE
+
 
 class MongoAILogger:
     def __init__(self):
@@ -19,13 +21,13 @@ class MongoAILogger:
 
     # Just counting how much we spent for users quires, what we found in Vector base, raw transit data , AI response for counting
     async def log_request(
-            self,
-            user_query: str,
-            retrieved_docs: List[Dict[str, Any]],
-            ai_response: Any,
-            usage: Dict[str, int],
-            formatted_input: Optional[str] = None,  # [OK] Новое поле
-            model_name: str = "gpt-4o-mini"
+        self,
+        user_query: str,
+        retrieved_docs: List[Dict[str, Any]],
+        ai_response: Any,
+        usage: Dict[str, int],
+        formatted_input: Optional[str] = None,  # [OK] Новое поле
+        model_name: str = "gpt-4o-mini",
     ):
         # How much we spent in OpenAI
         p_tokens = usage.get("prompt_tokens", 0)
@@ -40,16 +42,12 @@ class MongoAILogger:
             "formatted_input": formatted_input,  # [OK] Сохраняем
             "context": retrieved_docs,
             "response": ai_response,
-            "stats": {
-                "tokens": usage,
-                "cost_usd": cost,
-                "model": model_name
-            },
+            "stats": {"tokens": usage, "cost_usd": cost, "model": model_name},
             "evaluation": {
                 "faithfulness": None,
                 "relevancy": None,
-                "status": "pending"
-            }
+                "status": "pending",
+            },
         }
 
         result = await self.collection.insert_one(log_entry)
@@ -58,25 +56,27 @@ class MongoAILogger:
     # AS a final we ge id record in DB
 
     # WE USING THIS FUNCTION TO GET INFORMATION FROM RESPONSE FAST API and get to async def log_request
-    async def log_analytics(self, request, raw_data, final_res, raw_ai_obj, formatted_text=None):
+    async def log_analytics(
+        self, request, raw_data, final_res, raw_ai_obj, formatted_text=None
+    ):
         """INTEGRATION WHIT  FastAPI"""
 
         try:
             docs = []
 
             # 1. Пытаемся достать контекст из ответа AI (мы его туда прицепили в AIEngine)
-            if hasattr(final_res, 'metadata_context'):
+            if hasattr(final_res, "metadata_context"):
                 docs = final_res.metadata_context
             # 2. Если нет, пробуем из сырых данных (старый способ)
             elif isinstance(raw_data, dict):
                 docs = raw_data.get("relevant_texts", [])
 
             # Извлекаем usage из объекта OpenAI
-            if raw_ai_obj and hasattr(raw_ai_obj, 'usage'):
+            if raw_ai_obj and hasattr(raw_ai_obj, "usage"):
                 usage_data = {
                     "prompt_tokens": raw_ai_obj.usage.prompt_tokens,
                     "completion_tokens": raw_ai_obj.usage.completion_tokens,
-                    "total_tokens": raw_ai_obj.usage.total_tokens
+                    "total_tokens": raw_ai_obj.usage.total_tokens,
                 }
             else:
                 usage_data = {"total_tokens": 0}
@@ -86,7 +86,7 @@ class MongoAILogger:
                 retrieved_docs=docs,
                 ai_response=final_res,
                 usage=usage_data,  # <--- ЗАПЯТУЮ ДОБАВИЛ
-                formatted_input=formatted_text  # [OK] Передаем дальше
+                formatted_input=formatted_text,  # [OK] Передаем дальше
             )
         except Exception as e:
             print(f"Logging error: {e}")
