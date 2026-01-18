@@ -115,9 +115,10 @@ class AIEngine:
 
         # 4. PROMPT PREPARATION
         # Мы добавляем жесткую инструкцию для поля 'recommendations'
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", JYOTISH_SYSTEM_PROMPT),
-            ("user", """
+            # 4. PROMPT PREPARATION
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("system", JYOTISH_SYSTEM_PROMPT),
+                ("user", """
                 SECTION 1: KNOWLEDGE BASE (CONTEXT)
                 {context}
 
@@ -131,13 +132,13 @@ class AIEngine:
 
                 4. 'recommendations' (MANDATORY ONE ACTION):
                 - Generate EXACTLY ONE string: ["Action Text"].
-                - LOGIC: Look at the problem in {top_tension} -> solve it using {super_power}.
-                - Example: "Since your Health (House 6) is weak, use your Friends (House 11) to find a good doctor."
-                - DO NOT output a list of 3 items. Only 1 specific strategic advice.
+                - EXECUTE the 'MECHANICS OF GENERATION' defined in the System Prompt.
+                - CRITICAL: Take the resource mentioned in 'astrological_analysis' and turn it into a LITERAL PHYSICAL VERB (e.g., "Comfort" -> "Stay at home").
+                - Do not output generic advice.
 
                 Focus areas for remedies: {top_tension}
                 """)
-        ])
+            ])
 
         structured_llm = self.llm.with_structured_output(AstrologicalConsultation)
         chain = prompt_template | structured_llm
