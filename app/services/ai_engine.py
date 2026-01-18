@@ -84,33 +84,40 @@ class AIEngine:
         # 3. RAG RETRIEVAL (С ЗАЩИТОЙ ОТ ОШИБОК)
         # Инициализируем переменную ЗАРАНЕЕ, чтобы избежать UnboundLocalError
         context = ""
+        docs = []  # <--- ВАЖНО: Инициализируем список пустым, чтобы не было ошибки UnboundLocalError в конце
 
         try:
             retriever = self.vsm.get_retriever()
             retriever.search_kwargs = {"k": 6}
 
-            # Формируем запрос
+            # ФИКС: Запрос на РУССКОМ языке
             query = (
-                f"Vedic remedies, Mantras, Gemstones and specific Upayas for weak {weakest_house}. "
-                f"Positive effects and how to strengthen {strongest_house}."
+                f"Подробное описание {weakest_house}-го дома: за что отвечает, карма, проблемы, болезни. "
+                f"Упайи, мантры, методы гармонизации и коррекции для слабого {weakest_house}-го дома. "
+                f"Позитивные характеристики и сила {strongest_house}-го дома."
             )
 
-            print(f"🔎 DEBUG: RAG Query: {query}")
+            print(f"🔎 DEBUG: RAG Query (RU): {query}")
 
-            # Пытаемся найти документы
             docs = await retriever.ainvoke(query)
 
             if docs:
                 print(f"✅ DEBUG: Найдено документов: {len(docs)}")
+
+                # Лог для проверки глазами
+                print("📄 --- НАЧАЛО RAG КОНТЕКСТА ---")
+                for i, d in enumerate(docs):
+                    print(f"📄 DOC [{i}]: {d.page_content.replace(chr(10), ' ')[:100]}...")
+                print("📄 --- КОНЕЦ RAG КОНТЕКСТА ---")
+
                 context = "\n\n".join([d.page_content for d in docs])
             else:
-                print("⚠️ DEBUG: RAG вернул пустой список (документы не найдены).")
-                context = "No specific remedies found in knowledge base."
+                print("⚠️ DEBUG: RAG вернул пустой список.")
+                context = "В базе знаний нет информации по этому запросу."
 
         except Exception as e:
-            # Если база упала (нет соединения, ошибка FAISS и т.д.), мы не крашим всё приложение
-            print(f"🚨 RAG ERROR (Игнорируем и идем дальше): {e}")
-            context = "Knowledge base temporarily unavailable."
+            print(f"🚨 RAG ERROR: {e}")
+            context = "Knowledge base unavailable."
 
 
         # 4. PROMPT PREPARATION
