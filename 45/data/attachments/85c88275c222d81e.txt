@@ -1,5 +1,0 @@
-INFO     httpx:_client.py:1025 HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 429 Too Many Requests"
-INFO     openai._base_client:_base_client.py:1071 Retrying request to /embeddings in 0.469021 seconds
-INFO     httpx:_client.py:1025 HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 429 Too Many Requests"
-INFO     openai._base_client:_base_client.py:1071 Retrying request to /embeddings in 0.983028 seconds
-INFO     httpx:_client.py:1025 HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 429 Too Many Requests"
