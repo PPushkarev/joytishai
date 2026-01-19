@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   test:
     name: Run All Automated Tests
@@ -46,25 +51,33 @@ jobs:
           ANALYZE_ENDPOINT: /api/v1/forecast/generate
           PYTHONPATH: .
         run: |
-          # 1. Запуск сервера в фоне
           nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > server.log 2>&1 &
-          
-          # 2. Ожидание инициализации
-          sleep 12
-          
-          # 3. Проверка запуска
+          sleep 15
           if ! ps aux | grep -v grep | grep uvicorn > /dev/null; then
             echo "❌ Server failed to start. Logs:"
             cat server.log
             exit 1
           fi
-          
-          # 4. Запуск тестов
           pytest tests/ -v -s
-          
-          # 5. Всегда выводить логи сервера в конце для контроля
           echo "--- Server Logs ---"
           cat server.log
+
+      - name: Generate Allure Report
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        with:
+          allure_results: allure-results
+          gh_pages: gh-pages
+          allure_report: allure-report
+          allure_history: allure-history
+
+      - name: Deploy Report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
 
   deploy:
     name: Trigger Deployment
