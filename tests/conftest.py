@@ -10,13 +10,12 @@ import httpx
 
 load_dotenv()
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def api_client():
-
-    """Make Http client fixture."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         yield client
 
+    await asyncio.sleep(0.1)
 
 
 # 1. FIX для Windows ( RuntimeError: Event loop is closed)
