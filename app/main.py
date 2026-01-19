@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
-
+import asyncio
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -187,18 +187,35 @@ async def daily_forecast_analytics(request: ForecastRequest):
     Main endpoint: Consultation -> Validation -> Simple Logging
     """
 
-    # 1. Get data (Astro)
-    raw_data = await astro_client.get_transit_data(request.model_dump())
+    # --- 1. Get data (Astro) with Safety Shield ---
+    try:
+        raw_data = await astro_client.get_transit_data(request.model_dump())
+    except asyncio.TimeoutError:
+        # This catch is specifically for your Test 5
+        logger.error("Astro Service timeout")
+        raise HTTPException(
+            status_code=504,
+            detail="Astro Service Timeout: Dependency took too long to respond."
+        )
+    except Exception as e:
+        # General protection for Test 2 and other crashes
+        logger.error(f"Astro Service connection error: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Astro Service Error: {str(e)}"
+        )
 
+    # Legacy check for dictionary errors
     if isinstance(raw_data, dict) and "error" in raw_data:
         raise HTTPException(
             status_code=502, detail=f"Astro Service Error: {raw_data['error']}"
         )
 
+    # --- 2. Data Preparation ---
     if isinstance(raw_data, dict):
         raw_data["chart_data"] = request.chart_data.model_dump()
 
-    # 2. Answer generation(AI + Validation)
+    # --- 3. Answer generation (AI + Validation) ---
     final_consultation, audit_results, raw_response = await run_safe_generation(
         raw_data, ai_engine
     )

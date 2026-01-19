@@ -1,24 +1,31 @@
-import pytest
-import httpx
-import os
+
 from dotenv import load_dotenv
-import asyncio
-import pytest
 import sys
 import httpx
+import pytest
+import asyncio
+from httpx import ASGITransport, AsyncClient
+from app.main import app
 
 
 load_dotenv()
-
+# FiXTUTE FOR LOCAL REAL SERVER TESTING
 @pytest.fixture
-async def api_client():
+async def network_client():
     async with httpx.AsyncClient(timeout=60.0) as client:
         yield client
 
     await asyncio.sleep(0.1)
 
 
-# 1. FIX для Windows ( RuntimeError: Event loop is closed)
+# FiXTUTE FOR LOCAL CODE TESTING
+@pytest.fixture
+async def local_client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+# 1. FIX for Windows ( RuntimeError: Event loop is closed)
 @pytest.fixture(scope="session")
 def event_loop():
 
@@ -28,3 +35,5 @@ def event_loop():
         loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+

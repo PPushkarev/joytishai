@@ -3,7 +3,6 @@
 import os
 import pytest
 from dotenv import load_dotenv
-
 from app.services.ai_engine import AIEngine
 import allure
 
@@ -11,7 +10,6 @@ load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
 
 # 1. SERVICE (Interpretation/Consultant)
-# Base URL from env (default to local), but endpoint is fixed from your main.py
 MY_SERVICE_BASE = os.getenv("TEST_API_URL", "http://127.0.0.1:8000")
 MY_SERVICE_ENDPOINT = "/api/v1/forecast/generate"
 
@@ -21,7 +19,7 @@ ASTRO_ENGINE_BASE = os.getenv(
 )
 ASTRO_ENGINE_ENDPOINT = "/api/v1/analyze"
 
-# Final URLs construction
+
 INTERPRETATION_URL = f"{MY_SERVICE_BASE.rstrip('/')}{MY_SERVICE_ENDPOINT}"
 ASTRO_ENGINE_URL = f"{ASTRO_ENGINE_BASE.rstrip('/')}{ASTRO_ENGINE_ENDPOINT}"
 
@@ -271,15 +269,12 @@ payload_ai = {
 @pytest.mark.asyncio
 class TestAstroEngineAPI:
 
-
-
     @allure.story("JOYTISHAPI")
     @allure.description("Check if the External Astro Engine (Railway) is alive")
-
-    async def test_1_astro_engine_raw_response(self, api_client):
+    async def test_1_astro_engine_raw_response(self, network_client):
         """TEST 1: Check if the External Astro Engine (Railway) is alive."""
         with allure.step(f"\n[ENGINE] Pinging: {ASTRO_ENGINE_URL}"):
-            response = await api_client.post(ASTRO_ENGINE_URL, json=payload)
+            response = await network_client.post(ASTRO_ENGINE_URL, json=payload)
             response_time = response.elapsed.total_seconds()
 
         with allure.step("Checking time response"):
@@ -291,14 +286,8 @@ class TestAstroEngineAPI:
             data = response.json()
             assert len(data) > 0, "Response is empty!"
 
-
-
-
-
-
     @allure.story("JOYTISHAI")
     @allure.description("Check Internal AI Logic (Integration Test).")
-
     async def test_2_ai_generation_logic(self):
         """TEST 2: Check Internal AI Logic (Unit Test)."""
         generator = AIEngine()
@@ -313,93 +302,14 @@ class TestAstroEngineAPI:
         assert result is not None
         assert len(result.astrological_analysis) > 100, "AI Response is empty!"
 
-
-
-
-
-    #
-    # @allure.story("Production external endpoit")
-    # @allure.description("FULL INTEGRATION (Testing  service orchestrator).")
-    # @allure.story("Production End-to-End Flow")
-
-    # async def test_3_production_flow_with_real_data(self, api_client):
-    #     """
-    #     TEST 3: Validate the full orchestration flow.
-    #     Checks connection to Railway, RAG context retrieval, and OpenAI response formatting.
-    #     """
-    #
-    #     # 1. Dispatch Request
-    #     with allure.step(f"POST request to: {INTERPRETATION_URL}"):
-    #         response = await api_client.post(
-    #             INTERPRETATION_URL,
-    #             json=payload_ai,
-    #             timeout=60.0  # Increased timeout for deep AI analysis
-    #         )
-    #
-    #     # 2. Validate HTTP Status
-    #     with allure.step("Validate HTTP 200 Status"):
-    #         status = response.status_code
-    #         # print(f"\n[DEBUG] Connection Status: {status}")
-    #         assert status == 200, f"Expected 200 OK, but got {status}. Response: {response.text}"
-    #
-    #     # 3. Parse and Debug Response Data
-    #     with allure.step("Extract and Debug JSON Response"):
-    #         try:
-    #             data = response.json()
-    #         except Exception as e:
-    #             pytest.fail(f"Failed to parse JSON response: {e}")
-    #
-    #         # PRINT FOR LOCAL DEBUGGING (Visible in PyCharm and GitHub Actions Logs)
-    #         # print("\n" + "=" * 60)
-    #         # print("--- AI SERVICE RESPONSE DEBUG ---")
-    #         # print(f"Response Keys: {list(data.keys())}")
-    #         # # This will show us EXACTLY what is inside the field
-    #         # print(f"Content of 'astrological_analysis': '{data.get('astrological_analysis')}'")
-    #         # print("=" * 60 + "\n")
-    #
-    #         # Attach the full raw JSON to Allure for visual inspection
-    #         import json
-    #         allure.attach(
-    #             json.dumps(data, indent=2, ensure_ascii=False),
-    #             name="Raw API Response",
-    #             attachment_type=allure.attachment_type.JSON
-    #         )
-    #
-    #     # 4. Assert Content Integrity
-    #     with allure.step("Verify Astrological Content"):
-    #         # Attempt to retrieve content from primary or fallback keys
-    #         analysis = data.get("astrological_analysis")
-    #
-    #         # Diagnostic attachment
-    #         allure.attach(
-    #             str(analysis),
-    #             name="Extracted Analysis Text",
-    #             attachment_type=allure.attachment_type.TEXT
-    #         )
-    #
-    #         # Check if the field exists and is not an empty string/None
-    #         assert analysis is not None, "The 'astrological_analysis' key is missing from the response!"
-    #         assert isinstance(analysis, str), f"Expected string in analysis, but got {type(analysis)}"
-    #
-    #         content_len = len(analysis.strip())
-    #         # print(f"[DEBUG] Character count: {content_len}")
-    #
-    #         # Final validation: Content must be descriptive (at least 100 characters)
-    #         assert content_len > 100, (
-    #             f"AI generated an insufficient response. "
-    #             f"Length: {content_len} chars. Content: '{analysis}'"
-    #         )
-    #
-
-
     @allure.story("Production external endpoit")
     @allure.description("FULL INTEGRATION (Testing  service orchestrator).")
     @allure.story("Production End-to-End Flow")
-    async def test_3_production_flow_with_real_data(self, api_client):
+    async def test_3_production_flow_with_real_data(self, network_client):
         """TEST 3: FULL INTEGRATION (Testing API JOYTISH server and AI Consultation)."""
 
         with allure.step(f"Calling My Service: {INTERPRETATION_URL}"):
-            response = await api_client.post(INTERPRETATION_URL, json=payload_ai)
+            response = await network_client.post(INTERPRETATION_URL, json=payload_ai)
 
         with allure.step("Checking code response"):
             assert (response.status_code == 200), f"External Engine failed: {response.status_code}"
@@ -407,9 +317,7 @@ class TestAstroEngineAPI:
         with allure.step("Extracting and Checking AI Text"):
             data = response.json()
 
-
             ai_text_content = data.get("ai_analysis", "")
-
 
             allure.attach(
                 str(ai_text_content),
@@ -417,5 +325,4 @@ class TestAstroEngineAPI:
                 attachment_type=allure.attachment_type.TEXT
             )
 
-            assert ai_text_content  != None, f"AI text is not exist"
-
+            assert ai_text_content != None, f"AI text is not exist"

@@ -1,6 +1,7 @@
 import json
 from unittest.mock import AsyncMock, patch
-
+import asyncio
+import allure
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -129,94 +130,147 @@ REAL_PAYLOAD = {
 }
 
 
-@pytest.mark.asyncio
-async def test_1_pydantic_validation():
-    """TEST 1: Verifies 422 error on empty payload."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        response = await ac.post(TARGET_ENDPOINT, json={})
-    assert response.status_code == 422
-    print("✅ Pydantic validation test passed.")
-
+@allure.feature("Engine")
 
 @pytest.mark.asyncio
-async def test_2_request_fails_astro_service():
-    """TEST 2: Checks how the app handles an error from the calculation service."""
+class TestEngineCheck:
 
-    # ПУТЬ ПАТЧА: Попробуй заменить на путь к самому КЛАССУ сервиса
-    # Например, если он лежит в app/services/astro_connector.py:
-    # patch("app.services.astro_connector.AstroService.get_transit_data", ...)
+    @allure.story("Checking SERVER 422 error")
+    @allure.description("Verifies that the server returns 422 Unprocessable Entity when an empty payload is sent.")
+    async def test_1_pydantic_validation(self, local_client):
+        """TEST 1: Verifies 422 error on empty payload."""
 
-    # Но для начала попробуем "ленивый" патч самого модуля:
-    with patch(
-        "app.main.astro_client.get_transit_data", new_callable=AsyncMock
-    ) as mock_astro:
-        mock_astro.return_value = {"error": "Connection lost"}
+        with allure.step(f"Sending empty POST request to {TARGET_ENDPOINT}"):
+            response = await local_client.post(TARGET_ENDPOINT, json={})
 
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+        with allure.step("Checking if response status is 422"):
 
-    # Если снова 200, значит патч не попал в цель
-    assert response.status_code == 502
-    print("✅ Service failure test finally passed!")
+            assert response.status_code == 422, f"Expected 422, but got {response.status_code}. Response: {response.text}"
 
 
-@pytest.mark.asyncio
-async def test_3_ai_fails_but_data_exists():
-    """TEST 3: Ensures system handles AI timeout gracefully."""
-    mock_astro_res = {"status": "ok", "derived_tables": {}, "transits": {}}
 
-    with patch(
-        "app.main.astro_client.get_transit_data", new_callable=AsyncMock
-    ) as mock_astro:
+    @allure.story("Error Handling")
+    @allure.description("API SERVER JOYTISH DOES NOT WORK")
+    async def test_2_request_fails_astro_service(self, local_client):
+        """TEST 2: Checks how the app handles an error from the calculation service."""
+
         with patch(
-            "app.main.ai_engine.generate_consultation", new_callable=AsyncMock
-        ) as mock_ai:
-            mock_astro.return_value = mock_astro_res
-            # Имитируем ошибку
-            mock_ai.side_effect = Exception("OpenAI Timeout")
+                "app.main.astro_client.get_transit_data", new_callable=AsyncMock
+        ) as mock_astro:
+            mock_astro.return_value = {"error": "Connection lost"}
 
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                response = await ac.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+            with allure.step(f"Sending real payload to broken server API JOYITISH"):
+                response = await local_client.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
 
-    # Теперь твой код возвращает 200, так как run_safe_generation ловит исключение
-    assert response.status_code == 200
-    res_json = response.json()
-    assert "AI Generation Error" in res_json["ai_analysis"]
-    print("✅ AI failure handling test passed.")
+            # Если снова 200, значит патч не попал в цель
+            assert response.status_code == 502, f"Expected 502 Bad Gateway, but got {response.status_code}"
 
 
-@pytest.mark.asyncio
-async def test_4_full_success_flow():
-    """TEST 4: FULL SUCCESS (Verifying nested structure)"""
-    mock_astro_res = {"status": "ok", "derived_tables": {}, "transits": {}}
-    mock_ai_res = {
-        "daily_title": "Success",
-        "astrological_analysis": "Full analysis text.",
-        "recommendations": ["Rest"],
-        "classic_wisdom": "Patience is key.",
-    }
 
-    with patch(
-        "app.main.astro_client.get_transit_data", new_callable=AsyncMock
-    ) as mock_astro:
+
+    @allure.story("Error Handling")
+    @allure.description("OPEN AI SERVER DOES NOT WORK")
+    async def test_3_ai_fails_but_data_exists(self, local_client):
+        """TEST 3: Ensures system handles AI timeout gracefully."""
+        mock_astro_res = {"status": "ok", "derived_tables": {}, "transits": {}}
+
         with patch(
-            "app.main.ai_engine.generate_consultation", new_callable=AsyncMock
-        ) as mock_ai:
-            mock_astro.return_value = mock_astro_res
-            mock_ai.return_value = mock_ai_res
+            "app.main.astro_client.get_transit_data", new_callable=AsyncMock
+        ) as mock_astro:
+            with patch(
+                "app.main.ai_engine.generate_consultation", new_callable=AsyncMock
+            ) as mock_ai:
+                mock_astro.return_value = mock_astro_res
+                # Имитируем ошибку
+                mock_ai.side_effect = Exception("OpenAI Timeout")
 
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                response = await ac.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+                with allure.step(f"Sending request: Astro Engine works, but OpenAI fails"):
+                    response = await local_client.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+                    assert response.status_code == 200,f"Expected 200 even if AI fails, but got {response.status_code}"
+                    res_json = response.json()
+                    analysis_content = str(res_json.get("ai_analysis", ""))
+                    assert "AI Generation Error" in analysis_content, "Error in AI "
 
-    assert response.status_code == 200
-    res_json = response.json()
+    @allure.story("Full Integration Flow")
+    @allure.description("AI and API SERVERS WORK FINE")
+    async def test_4_full_success_flow(self, local_client):
+        """TEST 4: FULL SUCCESS (Verifying nested structure)"""
+        mock_astro_res = {"status": "ok", "derived_tables": {}, "transits": {}}
+        mock_ai_res = {
+            "daily_title": "Success",
+            "astrological_analysis": "Full analysis text.",
+            "recommendations": ["Rest"],
+            "classic_wisdom": "Patience is key.",
+        }
 
-    # ПРОВЕРКА ВЛОЖЕННОЙ СТРУКТУРЫ
-    assert "ai_analysis" in res_json
-    assert "source_data" in res_json
-    assert res_json["ai_analysis"]["daily_title"] == "Success"
-    print("✅ Full success flow test passed.")
+        with patch(
+            "app.main.astro_client.get_transit_data", new_callable=AsyncMock
+        ) as mock_astro:
+            with patch(
+                "app.main.ai_engine.generate_consultation", new_callable=AsyncMock
+            ) as mock_ai:
+                mock_astro.return_value = mock_astro_res
+                mock_ai.return_value = mock_ai_res
+
+                with allure.step(f" Astro Engine and OpenAI workng"):
+                    response = await local_client.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+
+                with allure.step("Code checking"):
+                    assert response.status_code == 200, f"Expected 200 , but got {response.status_code}"
+                    res_json = response.json()
+
+                    allure.attach(
+                        json.dumps(res_json, indent=2, ensure_ascii=False),
+                        name="Full Success Response",
+                        attachment_type=allure.attachment_type.JSON
+                    )
+
+                    assert "ai_analysis" in res_json, "Missing ai_analysis block"
+                    assert "source_data" in res_json, "Missing source_data block"
+                    assert res_json["ai_analysis"]["daily_title"] == "Success"
+
+    @allure.story("Error Handling")
+    @allure.description("Check handling of Astro Service Timeout")
+    async def test_5_astro_service_timeout(self, local_client):
+        """TEST 5: Checks system behavior on external service timeout."""
+
+        # We simulate a hang/timeout using side_effect with asyncio.TimeoutError
+        with patch(
+                "app.main.astro_client.get_transit_data", side_effect=asyncio.TimeoutError
+        ):
+            with allure.step("Simulating external API timeout from Joytish service"):
+                response = await local_client.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+
+            with allure.step("Verifying that server returns Gateway Error (502 or 504)"):
+                # Usually, if a dependency times out, we expect 502 or 504
+                assert response.status_code in [502, 504], f"Expected Gateway Error, but got {response.status_code}"
+
+
+
+
+    @allure.story("Edge Cases")
+    @allure.description("Check handling of empty data from Astro Service")
+    async def test_6_astro_returns_empty_data(self, local_client):
+        """TEST 6: Checks system stability when Joytish returns empty structures."""
+
+        # Scenario where API is alive but returns empty planets/houses
+        mock_astro_res = {"status": "ok", "planets": {}, "houses": []}
+        mock_ai_res = {"daily_title": "Limited Info", "ai_analysis": "No data to analyze"}
+
+        with patch(
+                "app.main.astro_client.get_transit_data", new_callable=AsyncMock
+        ) as mock_astro:
+            with patch(
+                    "app.main.ai_engine.generate_consultation", new_callable=AsyncMock
+            ) as mock_ai:
+                mock_astro.return_value = mock_astro_res
+                mock_ai.return_value = mock_ai_res
+
+                with allure.step("Sending request with empty astrological data"):
+                    response = await local_client.post(TARGET_ENDPOINT, json=REAL_PAYLOAD)
+
+                with allure.step("Code checking for stability"):
+                    assert response.status_code == 200, f"Expected 200, but got {response.status_code}"
+                    res_json = response.json()
+                    assert "source_data" in res_json
+
