@@ -319,17 +319,23 @@ class TestAstroEngineAPI:
         with allure.step("Checking code response"):
             assert (response.status_code == 200), f"External Engine failed: {response.status_code}"
 
-        with allure.step("Extracting and Checking AI Text"):
-            # 2. Распаковываем JSON (как ты делал в Test 1)
-            data = response.json()
 
-            ai_text = data.get("ai_analysis") or data.get("astrological_analysis")
+
+        with allure.step("Extracting and Checking AI Text"):
+            data = response.json()
+            print(data)
+            # Если твой API возвращает словарь, берем конкретное поле с текстом
+            if isinstance(data, dict):
+                # Пробуем достать основное поле анализа
+                ai_text_content = data.get("astrological_analysis") or data.get("ai_analysis")
+            else:
+                ai_text_content = str(data)
 
             allure.attach(
-                str(ai_text),
-                name="Full AI Response",
+                str(ai_text_content),
+                name="Target AI Analysis Text",
                 attachment_type=allure.attachment_type.TEXT
             )
 
-            assert ai_text is not None, "AI text field is missing in JSON!"
-            assert len(ai_text) > 100, "AI text is too short!"
+            assert ai_text_content is not None, "AI content field is missing!"
+            assert len(ai_text_content) > 100, f"AI text is too short! Got only {len(ai_text_content)} chars"
