@@ -1,0 +1,1 @@
+INFO     httpx:_client.py:1740 HTTP Request: POST https://jyotishapi-production.up.railway.app/api/v1/analyze "HTTP/1.1 200 OK"

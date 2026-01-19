@@ -1,0 +1,4 @@
+ERROR    app.main:main.py:129 Error on attempt 1: OpenAI Timeout
+ERROR    app.main:main.py:129 Error on attempt 2: OpenAI Timeout
+ERROR    app.main:main.py:129 Error on attempt 3: OpenAI Timeout
+INFO     httpx:_client.py:1740 HTTP Request: POST http://test/api/v1/forecast/generate "HTTP/1.1 200 OK"

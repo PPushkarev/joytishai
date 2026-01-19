@@ -1,0 +1,2 @@
+INFO     httpx:_client.py:1025 HTTP Request: POST https://api.openai.com/v1/embeddings "HTTP/1.1 200 OK"
+INFO     httpx:_client.py:1740 HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"

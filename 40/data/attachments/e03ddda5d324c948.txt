@@ -1,0 +1,1 @@
+INFO     httpx:_client.py:1740 HTTP Request: POST http://test/api/v1/forecast/generate "HTTP/1.1 422 Unprocessable Entity"
