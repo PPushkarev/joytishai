@@ -1,186 +1,139 @@
 import logging
-import os
+import pandas as pd
 from motor.motor_asyncio import AsyncIOMotorClient
 from datasets import Dataset
-from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy, context_precision
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings # <--- ЭТО ВАЖНО
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+# Метрики Ragas
 from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevancy, context_precision
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 
-# Настройка логгера
 logger = logging.getLogger(__name__)
 
 
-async def prepare_ragas_dataset(mongo_uri: str):
-    """
-    БЛОК 1: Подготовка данных
-    Достаем логи со статусом 'pending', чистим контекст и формируем Dataset.
-    """
+# --- ГЛОБАЛЬНАЯ ИНИЦИАЛИЗАЦИЯ (для доступа из тестов и Allure) ---
+_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+_emb = OpenAIEmbeddings(model="text-embedding-3-small")
+
+judge_llm = LangchainLLMWrapper(_llm)
+judge_embeddings = LangchainEmbeddingsWrapper(_emb)
+
+# Привязываем судью к метрикам сразу при импорте модуля
+for m in [faithfulness, answer_relevancy, context_precision]:
+    m.llm = judge_llm
+    if hasattr(m, 'embeddings'):
+        m.embeddings = judge_embeddings
+
+
+async def prepare_ragas_datasets(mongo_uri: str):
     client = AsyncIOMotorClient(mongo_uri)
     db = client.joytishai_db
     collection = db.ai_logs
 
-    # 1. Берем 5 старых логов, которые еще не проверены
+
+    # Берем записи, ожидающие оценки (limit 5 для теста)
     cursor = collection.find({"evaluation.status": "pending"}).limit(5)
     logs = await cursor.to_list(length=5)
 
     if not logs:
-        return None, None, collection
+        return None, None, None, collection
 
-    # 2. Создаем структуру для Ragas
-    ragas_data = {
-        "question": [],
-        "answer": [],
-        "contexts": [],
-        "ground_truth": []
-    }
+    data_tech = {"question": [], "answer": [], "contexts": [], "reference": []}
+    data_knowledge = {"question": [], "answer": [], "contexts": [], "reference": []}
 
-    # 3. Заполняем списки данными
+    # ВАШ ИДЕАЛЬНЫЙ ЭТАЛОН
+    reference_text = (
+        "Сегодня Луна находится в седьмом доме, что приносит позитивные эмоции и поддержку в партнерских отношениях. "
+        "Транзитные планеты, такие как Юпитер, также аспектируют Луну, что усиливает удачу и возможности в общении и взаимодействии с окружающими. "
+        "В то же время, Солнце, Марс и Меркурий находятся в шестом доме, что может указывать на трудности в службе и здоровье, требующие внимания. "
+        "Сильные дома: Четвертый дом, связанный с комфортом, и Девятый дом — удача. "
+        "Слабые дома: Пятый дом (творчество) и Восьмой дом (кризисы). "
+        "Мудрость: Пятый и девятый дома представляют милость и удачу – хорошую карму. "
+        "Девятый дом связан с удачей особым образом (лотереи, везение). "
+        "Рекомендации: Обратитесь к семейным ценностям (4) и духовным практикам (9), чтобы преодолеть трудности в творчестве (5) и трансформациях (8)."
+    )
+
     for log in logs:
-        # --- Вопрос ---
-        ragas_data["question"].append(str(log.get("user_query", "")))
-
-        # --- Ответ AI ---
+        user_query = str(log.get("user_query", ""))
         response_obj = log.get("response", {})
-        if isinstance(response_obj, dict):
-            ans_text = response_obj.get("astrological_analysis", "")
-        else:
-            ans_text = str(response_obj)
-        ragas_data["answer"].append(ans_text)
+        answer = response_obj.get("astrological_analysis", "") if isinstance(response_obj, dict) else str(response_obj)
 
-        # --- Контекст (Очистка) ---
+        # 🪐 Технический датасет
+        data_tech["question"].append(user_query)
+        data_tech["answer"].append(answer)
+        data_tech["contexts"].append([user_query])
+        data_tech["reference"].append(user_query)
+
+        # 📚 Контентный датасет (RAG)
+        data_knowledge["question"].append(user_query)
+        data_knowledge["answer"].append(answer)
+
+        # Получаем реальный контекст из лога
         raw_context = log.get("context", [])
+        cleaned_context = [
+            item.get("page_content") if isinstance(item, dict) else str(item)
+            for item in raw_context
+        ]
 
+        # Если контекст пуст, Ragas выдаст 0. Для теста можно добавить фейк,
+        # но для жизни оставляем реальный из БД:
+        data_knowledge["contexts"].append(cleaned_context if cleaned_context else ["Пустой контекст"])
+        data_knowledge["reference"].append(reference_text)
 
-        print(f"🐛 RAW CONTEXT ID {log['_id']}: {raw_context}")
-
-        cleaned_context = []
-
-        # 👇 ДОБАВЬ ЭТИ СТРОКИ ДЛЯ ОТЛАДКИ 👇
-        print(f"\n📦 --- DEBUG ID: {log['_id']} ---")
-        print(f"🔑 Ключи в записи: {list(log.keys())}")
-        print(f"📄 Содержимое поля 'context': {log.get('context')}")
-        print(f"📄 Содержимое поля 'metadata_context': {log.get('metadata_context')}")
-        print("-----------------------------------\n")
-
-
-        for item in raw_context:
-            if isinstance(item, str):
-                cleaned_context.append(item)
-            elif isinstance(item, dict):
-                # Ищем текст внутри объекта (page_content или text)
-                text = item.get("page_content") or item.get("text") or str(item)
-                cleaned_context.append(text)
-            else:
-                cleaned_context.append(str(item))
-
-        ragas_data["contexts"].append(cleaned_context)
-
-        # Ground Truth (заглушка)
-        ragas_data["ground_truth"].append("nan")
-
-    # 4. Создаем Dataset
-    dataset = Dataset.from_dict(ragas_data)
-    logger.info(f"📊 Подготовлен Dataset из {len(logs)} записей")
-
-    return dataset, logs, collection
-
-
-
-
-
+    return Dataset.from_dict(data_tech), Dataset.from_dict(data_knowledge), logs, collection
 
 
 async def execute_ragas_cycle(mongo_uri: str):
-    """
-    БЛОК 2: Ядро оценки (Evaluation Engine)
-    Запускает Ragas и сохраняет результаты в MongoDB.
-    """
-    logger.info("👨‍⚖️ [RAGAS ENGINE] Запуск цикла оценки...")
+    logger.info("👨‍⚖️ [RAGAS] Запуск финального аудита (RU адаптирован)...")
 
-    # 1. Готовим данные
-    dataset, logs, collection = await prepare_ragas_dataset(mongo_uri)
+    ds_tech, ds_knowledge, logs, collection = await prepare_ragas_datasets(mongo_uri)
 
-    if not dataset:
-        logger.info("💤 Нет логов для проверки (status='pending').")
-        return {"status": "idle", "processed": 0}
-
-    # 2. Метрики для судьи
-    active_metrics = [
-        faithfulness,  # Не врет ли?
-        answer_relevancy,  # По теме ли?
-        context_precision  # Качественный ли поиск?
-    ]
+    if not ds_tech:
+        return {"status": "idle"}
 
     try:
-        logger.info(f"⏳ Передаем {len(logs)} записей судье Ragas...")
+        # Инициализация ИИ-судьи
+        llm = ChatOpenAI(model="gpt-4o", temperature=0)
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-        # --- НАСТРОЙКА СУДЬИ ---
-        # 1. Модель для оценки (LLM)
-        # Используем gpt-4o для точности или gpt-4o-mini для экономии
-        # --- НАСТРОЙКА СУДЬИ ---
+        judge_llm = LangchainLLMWrapper(llm)
+        judge_emb = LangchainEmbeddingsWrapper(embeddings)
 
-        # 1. Создаем ChatOpenAI и оборачиваем его для Ragas
-        judge_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o", temperature=0))
+        # Настройка метрик (привязываем LLM к каждой)
+        metrics = [faithfulness, answer_relevancy, context_precision]
+        for m in metrics:
+            m.llm = judge_llm
+            if hasattr(m, 'embeddings'):
+                m.embeddings = judge_emb
 
-        # 2. Создаем OpenAIEmbeddings и тоже оборачиваем
-        judge_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings(model="text-embedding-3-small"))
+        # 1. Техническая оценка
+        results_tech = evaluate(dataset=ds_tech, metrics=[faithfulness], llm=judge_llm,
+                                embeddings=judge_emb).to_pandas()
 
+        # 2. Контентная оценка
+        results_know = evaluate(dataset=ds_knowledge, metrics=metrics, llm=judge_llm, embeddings=judge_emb).to_pandas()
 
-
-        print("\n🔍 --- ПРОВЕРКА ДАННЫХ ДЛЯ RAGAS ---")
-        print(f"Вопрос: {dataset['question'][0]}")
-        print(f"Контекст (что нашли): {dataset['contexts'][0]}")
-        print(f"Ответ (что проверяем): {dataset['answer'][0]}")
-        print("---------------------------------------\n")
-
-
-        # 3. МАГИЯ RAGAS 🚀
-        results = evaluate(
-            dataset=dataset,
-            metrics=active_metrics,
-            llm=judge_llm,  # <--- Передаем явно
-            embeddings=judge_embeddings  # <--- Передаем явно
-        )
-
-
-
-
-
-        # 4. Сохранение результатов
-        df = results.to_pandas()
-        count = 0
-
+        # 3. Сохранение
         for i, log in enumerate(logs):
-            scores = df.iloc[i]
+            res_t = results_tech.iloc[i]
+            res_k = results_know.iloc[i]
 
             await collection.update_one(
                 {"_id": log["_id"]},
-                {
-                    "$set": {
-                        "evaluation.faithfulness": float(scores.get("faithfulness", 0)),
-                        "evaluation.relevancy": float(scores.get("answer_relevancy", 0)),
-                        "evaluation.context_precision": float(scores.get("context_precision", 0)),
-                        "evaluation.status": "evaluated",
-                        "evaluation.engine": "ragas_professional"
-                    }
-                }
+                {"$set": {
+                    "evaluation.technical_faithfulness": float(res_t.get("faithfulness", 0)),
+                    "evaluation.knowledge_faithfulness": float(res_k.get("faithfulness", 0)),
+                    "evaluation.relevancy": float(res_k.get("answer_relevancy", 0)),
+                    "evaluation.context_precision": float(res_k.get("context_precision", 0)),
+                    "evaluation.status": "evaluated",
+                    "evaluation.engine": "ragas_ru_v2"
+                }}
             )
-            count += 1
-            print(f"✅ Ragas ID: {log['_id']} | Faith: {scores.get('faithfulness'):.2f}")
 
-        return {"status": "success", "processed": count}
+        return {"status": "success", "processed": len(logs)}
 
     except Exception as e:
-        logger.error(f"❌ Ошибка внутри Ragas: {e}")
-        # Маркируем ошибку в базе, чтобы не зацикливаться
-        if logs:
-            ids = [log["_id"] for log in logs]
-            await collection.update_many(
-                {"_id": {"$in": ids}},
-                {"$set": {"evaluation.status": "error", "evaluation.error_msg": str(e)}}
-            )
+        logger.error(f"❌ Критическая ошибка Ragas: {e}")
         return {"status": "error", "message": str(e)}
