@@ -56,20 +56,32 @@ class MongoAILogger:
     # AS a final we ge id record in DB
 
     # WE USING THIS FUNCTION TO GET INFORMATION FROM RESPONSE FAST API and get to async def log_request
+
     async def log_analytics(
-        self, request, raw_data, final_res, raw_ai_obj, formatted_text=None
+            self, request, raw_data, final_res, raw_ai_obj, formatted_text=None
     ):
-        """INTEGRATION WHIT  FastAPI"""
+        """INTEGRATION WITH FastAPI"""
 
         try:
             docs = []
 
-            # 1. Пытаемся достать контекст из ответа AI (мы его туда прицепили в AIEngine)
-            if hasattr(final_res, "metadata_context"):
+            # --- [FIX] УЛУЧШЕННЫЙ ПОИСК КОНТЕКСТА ---
+            # 1. Если final_res — это словарь (dict)
+            if isinstance(final_res, dict):
+                docs = final_res.get("metadata_context") or final_res.get("context") or []
+
+            # 2. Если final_res — это Pydantic объект
+            elif hasattr(final_res, "metadata_context"):
                 docs = final_res.metadata_context
-            # 2. Если нет, пробуем из сырых данных (старый способ)
-            elif isinstance(raw_data, dict):
+
+            # 3. Если в ответе пусто, пробуем найти в raw_data (запасной вариант)
+            if not docs and isinstance(raw_data, dict):
                 docs = raw_data.get("relevant_texts", [])
+
+            # Гарантируем, что docs — это список
+            if docs is None:
+                docs = []
+            # ----------------------------------------
 
             # Извлекаем usage из объекта OpenAI
             if raw_ai_obj and hasattr(raw_ai_obj, "usage"):
@@ -81,12 +93,53 @@ class MongoAILogger:
             else:
                 usage_data = {"total_tokens": 0}
 
+            # Мы передаем docs в retrieved_docs, а внутри log_request оно сохранится в поле "context"
             await self.log_request(
                 user_query=str(request.chart_data),
                 retrieved_docs=docs,
                 ai_response=final_res,
-                usage=usage_data,  # <--- ЗАПЯТУЮ ДОБАВИЛ
-                formatted_input=formatted_text,  # [OK] Передаем дальше
+                usage=usage_data,
+                formatted_input=formatted_text,
             )
+
+            # Полезный принт, чтобы видеть в консоли сервера, сохраняется ли контекст
+            print(f"📝 [LOGGER] Logged request. Context items: {len(docs)}")
+
         except Exception as e:
-            print(f"Logging error: {e}")
+            print(f"❌ Logging error: {e}")
+
+    #  OLD VERSION
+    # async def log_analytics(
+    #     self, request, raw_data, final_res, raw_ai_obj, formatted_text=None
+    # ):
+    #     """INTEGRATION WHIT  FastAPI"""
+    #
+    #     try:
+    #         docs = []
+    #
+    #         # 1. Пытаемся достать контекст из ответа AI (мы его туда прицепили в AIEngine)
+    #         if hasattr(final_res, "metadata_context"):
+    #             docs = final_res.metadata_context
+    #         # 2. Если нет, пробуем из сырых данных (старый способ)
+    #         elif isinstance(raw_data, dict):
+    #             docs = raw_data.get("relevant_texts", [])
+    #
+    #         # Извлекаем usage из объекта OpenAI
+    #         if raw_ai_obj and hasattr(raw_ai_obj, "usage"):
+    #             usage_data = {
+    #                 "prompt_tokens": raw_ai_obj.usage.prompt_tokens,
+    #                 "completion_tokens": raw_ai_obj.usage.completion_tokens,
+    #                 "total_tokens": raw_ai_obj.usage.total_tokens,
+    #             }
+    #         else:
+    #             usage_data = {"total_tokens": 0}
+    #
+    #         await self.log_request(
+    #             user_query=str(request.chart_data),
+    #             retrieved_docs=docs,
+    #             ai_response=final_res,
+    #             usage=usage_data,  # <--- ЗАПЯТУЮ ДОБАВИЛ
+    #             formatted_input=formatted_text,  # [OK] Передаем дальше
+    #         )
+    #     except Exception as e:
+    #         print(f"Logging error: {e}")
