@@ -16,7 +16,7 @@ async def test_api_consultation_full_flow():
     base_url = os.getenv("TEST_API_URL", "http://127.0.0.1:8000")
     endpoint = os.getenv("ANALYZE_ENDPOINT", "/api/v1/forecast/generate")
 
-    # Убираем возможные двойные слэши, если они случайно попали в .env
+
     api_url = f"{base_url.rstrip('/')}{endpoint}"
 
     print(f"\n🚀 Target API: {api_url}")
