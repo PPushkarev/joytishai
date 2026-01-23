@@ -16,7 +16,7 @@ class TestJoytishRagas:
 
     @allure.story("Accuracy and Retrieval Audit")
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("log_index", range(1))
+    @pytest.mark.parametrize("log_index", range(5))
     async def test_ragas_full_audit(self, log_index):
         """
         Professional Log Audit:
