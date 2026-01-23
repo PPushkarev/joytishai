@@ -17,21 +17,22 @@ A professional microservice for interpreting Vedic (Jyotish) horoscopes. The sys
 
 ## Key Features & Engineering Highlights
 
-* **🛡 Robust RAG Pipeline**:
+
+
+* **Robust RAG Pipeline**:
     * **Noise Reduction**: Implemented a custom regex-based cleaning layer to strip artifacts (headers, page numbers) from unstructured PDF data before context injection.
     * **Semantic Alignment**: Optimized vector search queries to bridge the language gap between technical code and Russian Vedic scriptures.
 
-* ** Chain-of-Thought Synthesis**:
+* **Chain-of-Thought Synthesis**:
     * **"Leverage Strategy" Logic**: The AI doesn't just list planetary positions; it identifies the *Weakest House* (Risk) and generates a strategic remedy using the *Strongest Houses* (Resources) as a support mechanism.
     * **Negative Constraints Prompting**: Strict system instructions prevent "hallucinations" (e.g., merging planets into wrong houses) and enforce qualitative descriptions over raw numerical scores.
 
-* ** Intelligent Orchestration**:
+* **Intelligent Orchestration**:
     * Acts as the system's "brain," coordinating data from the Astro Engine and synthesizing it into human-readable advice using **OpenAI JSON Mode**.
     * **Resilience Layer**: Built-in retry logic and error handling to prevent crashes when external APIs or Vector DBs are temporarily unavailable.
 
-* ** Analytics Deep-Dive**: Stores the full "thought process" (Raw Prompt vs. Output) in MongoDB for continuous prompt engineering and fine-tuning.
----
-
+* **Analytics Deep-Dive**:
+    * Stores the full "thought process" (Raw Prompt vs. Output) in MongoDB for continuous prompt engineering and fine-tuning.
 ##  System Architecture & Ecosystem
 
 This service is the **Central Orchestrator** of the Astroparamita platform. It bridges the gap between raw astronomical math and human-centric spiritual guidance.
