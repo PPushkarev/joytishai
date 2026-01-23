@@ -17,20 +17,21 @@ A professional microservice for interpreting Vedic (Jyotish) horoscopes. The sys
 
 ## Key Features & Engineering Highlights
 
-* **🛡️ Robust RAG Pipeline**:
+* **🛡 Robust RAG Pipeline**:
     * **Noise Reduction**: Implemented a custom regex-based cleaning layer to strip artifacts (headers, page numbers) from unstructured PDF data before context injection.
     * **Semantic Alignment**: Optimized vector search queries to bridge the language gap between technical code and Russian Vedic scriptures.
 
-* **🧠 Chain-of-Thought Synthesis**:
+* ** Chain-of-Thought Synthesis**:
     * **"Leverage Strategy" Logic**: The AI doesn't just list planetary positions; it identifies the *Weakest House* (Risk) and generates a strategic remedy using the *Strongest Houses* (Resources) as a support mechanism.
     * **Negative Constraints Prompting**: Strict system instructions prevent "hallucinations" (e.g., merging planets into wrong houses) and enforce qualitative descriptions over raw numerical scores.
 
-* **⚙️ Intelligent Orchestration**:
+* ** Intelligent Orchestration**:
     * Acts as the system's "brain," coordinating data from the Astro Engine and synthesizing it into human-readable advice using **OpenAI JSON Mode**.
     * **Resilience Layer**: Built-in retry logic and error handling to prevent crashes when external APIs or Vector DBs are temporarily unavailable.
 
-* **📊 Analytics Deep-Dive**: Stores the full "thought process" (Raw Prompt vs. Output) in MongoDB for continuous prompt engineering and fine-tuning.
+* ** Analytics Deep-Dive**: Stores the full "thought process" (Raw Prompt vs. Output) in MongoDB for continuous prompt engineering and fine-tuning.
 ---
+
 ##  System Architecture & Ecosystem
 
 This service is the **Central Orchestrator** of the Astroparamita platform. It bridges the gap between raw astronomical math and human-centric spiritual guidance.
@@ -74,6 +75,59 @@ This service is the **Central Orchestrator** of the Astroparamita platform. It b
 * **Procfile**: Deployment command for Railway.
 * **entrypoint.sh**: Startup script for sequential execution (Indexing -> Server).
 
+
+## Testing Architecture & Directory Structure
+
+Проект использует модульную структуру тестов, разделенную по уровням ответственности (Unit, Integration, E2E) и типам аудита (Security, RAG, Logic).
+
+```text
+tests/
+├── conftest.py                # Shared fixtures (HTTP clients, DB mocks, ENV loading)
+├── test_api_consultation.py   # End-to-End: Full cycle verification from request to final output
+├── test_security.py           # Security & Red Teaming: Jailbreak and Prompt Leakage attacks
+├── test_reasoning.py          # Logic & CoT: Chain-of-Thought and instruction following audit
+├── test_main.py               # Unit Tests for main functions of Engine 
+├── test_rag.py                # Infrastructure: ChromaDB audit, PDF ingestion, and metadata
+├── test_api.py                # Integration Tests for connections Resilience: handling of 502/504 errors and API timeouts
+└── test_rag_quality.py        # RAG Quality: Automated Faithfulness and Relevancy evaluation
+```
+## AI Test Suite and Engineering Excellence
+
+This project implements a multi-layered automated testing framework using **Pytest** and **Allure**, covering the entire AI lifecycle from raw data validation to deep semantic reasoning.
+
+### 1. End-to-End System Integration (E2E)
+* **Full Flow Validation**: Verifies the complete data journey: *User Input -> Transit Engine (External API) -> ChromaDB (Vector Search) -> OpenAI (Synthesis) -> Final Client Response*.
+* **Response Schema Integrity**: Enforces strict adherence to Pydantic JSON schemas, specifically validating mandatory blocks: `astrological_analysis`, `classic_wisdom`, and `recommendations`.
+
+
+
+### 2. AI Safety and Red Teaming (Security)
+* **Jailbreak Defense**: Automated adversarial attacks (e.g., "Pirate Attack") verify that the model cannot be forced to abandon its professional persona or use prohibited language.
+* **System Prompt Leakage**: Explicit tests to ensure internal configuration and proprietary system instructions remain hidden from the end-user.
+* **Ethical Guardrails**: Built-in safety checks to confirm the AI refuses to provide medical diagnoses, fatalistic predictions (e.g., exact date of death), or display gender bias.
+
+
+
+### 3. Infrastructure and Resilience
+* **Mocking and Isolation**: Utilizes `unittest.mock` to simulate external API timeouts and OpenAI server failures, ensuring the system handles "Bad Gateway" (502/504) errors gracefully.
+* **Vector Store Audit**: Dedicated tests for ChromaDB ensure PDF files are correctly ingested, metadata is preserved, and duplicate documents are automatically skipped.
+* **Pydantic Edge Cases**: Validation tests for empty payloads and corrupted astrological data to prevent 500-series server errors.
+
+### 4. Semantic and Logic Verification (CoT)
+* **Chain-of-Thought Audit**: Instead of simple keyword matching, the suite uses **Semantic Parsing** to verify that the AI's internal reasoning followed the correct planetary logic.
+* **Instruction Following**: Automated tracking of the model's ability to respect user-defined output constraints (e.g., step-by-step breakdown) versus hard-coded system instructions.
+
+
+
+---
+
+### Quality Metrics Dashboard (Allure)
+The testing process generates detailed Allure reports, providing visibility into:
+* **Test Severity**: Categorization of security and logic tests.
+* **Historical Trends**: Tracking model reliability over multiple iterations.
+* **Attachment Analysis**: Storage of raw AI "thought logs" for debugging failed logic chains.
+
+![Allure Report Dashboard](./docs/allure_report.jpg)
 
 ---
 ## API Preview
